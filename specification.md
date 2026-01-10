@@ -1,21 +1,27 @@
-### 1. The KifDiff Language Specification
+# KifDiff Language Specification v2.0
 
-A `.kifdiff` file is a plain text file that contains one or more operations. Each operation is defined by a set of directives.
+## Overview
+A `.kifdiff` file is a plain text file that contains one or more operations for modifying files. Each operation is defined by a set of directives with optional parameters.
 
-**Directives:**
-*   `@Kif FILE <file_path>`: Specifies the target file for all subsequent operations until the next `@Kif FILE` directive.
-*   `@Kif CREATE`: A block directive to create a new file.
-*   `@Kif DELETE`: A standalone directive to delete a file.
-*   `@Kif SEARCH_AND_REPLACE`: A block directive to perform a search and replace.
+## Core Directives
+
+### `@Kif FILE <file_path>`
+Specifies the target file for all subsequent operations until the next `@Kif FILE` directive.
+
+**Example:**
+```
+@Kif FILE lib/widgets/ui_input.dart
+```
 
 ---
 
-#### Tool 1: Create File
+## Operations
+
+### 1. Create File
 
 Creates a new file with the specified content. If the file already exists, it will be overwritten.
 
 **Syntax:**
-
 ```
 @Kif FILE <path/to/new_file.txt>
 @Kif CREATE
@@ -24,8 +30,6 @@ Creates a new file with the specified content. If the file already exists, it wi
 ```
 
 **Example:**
-To create a new Dart file `lib/constants.dart`:
-
 ```
 @Kif FILE lib/constants.dart
 @Kif CREATE
@@ -38,20 +42,17 @@ class AppConstants {
 
 ---
 
-#### Tool 2: Delete File
+### 2. Delete File
 
-Deletes the specified file from the filesystem.
+Deletes the specified file from the filesystem. **Note:** Files are automatically backed up before deletion (unless `--no-backup` is used).
 
 **Syntax:**
-
 ```
 @Kif FILE <path/to/file_to_delete.txt>
 @Kif DELETE
 ```
 
 **Example:**
-To delete an old utility file `lib/old_utils.dart`:
-
 ```
 @Kif FILE lib/old_utils.dart
 @Kif DELETE
@@ -59,92 +60,85 @@ To delete an old utility file `lib/old_utils.dart`:
 
 ---
 
-#### Tool 3: Search and Replace
+### 3. Search and Replace
 
 Finds a block of text in a file and replaces it with another block of text. This is the most powerful tool for modifying existing code.
 
 **Syntax:**
-
 ```
 @Kif FILE <path/to/target_file.dart>
 @Kif SEARCH_AND_REPLACE
 @Kif BEFORE
 ... (exact text to find) ...
 @Kif END_BEFORE
-
 @Kif AFTER
 ... (new text to replace it with) ...
 @Kif END_AFTER
 @Kif END_SEARCH_AND_REPLACE
 ```
 
-**Example:**
-Let's use this to add a new section to your `app_bar_demo_page.dart`. This is the exact operation you were trying to do with the git patch.
+**Important Notes:**
+- The BEFORE block must match exactly (including whitespace)
+- By default, only the first occurrence is replaced
+- Files are automatically backed up before modification
 
+**Example:**
 ```
 @Kif FILE example/lib/app_bar_demo_page.dart
 @Kif SEARCH_AND_REPLACE
 @Kif BEFORE
             const SizedBox(height: 24),
-
             // Section: With Title Tap
 @Kif END_BEFORE
-
 @Kif AFTER
             const SizedBox(height: 24),
-
             // Section: Menu Button With Actions
             CodeViewer(
               title: 'Menu Button With Actions',
-              code: '''
-UIAppBar(
-  title: 'Messages',
-  showMenuButton: true,
-  actions: [
-    IconButton(
-      icon: Icon(Icons.search),
-      onPressed: () {},
-    ),
-    IconButton(
-      icon: Icon(Icons.more_vert),
-      onPressed: () {},
-    ),
-  ],
-)''',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 16),
-                  _buildAppBarPreview(
-                    UIAppBar(
-                      title: 'Messages',
-                      showMenuButton: true,
-                      actions: [
-                        IconButton(
-                          icon: const Icon(Icons.search),
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Search pressed')),
-                            );
-                          },
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.more_vert),
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('More pressed')),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+              code: '''UIAppBar(...)''',
+              child: Column(...),
             ),
             const SizedBox(height: 24),
-
             // Section: With Title Tap
+@Kif END_AFTER
+@Kif END_SEARCH_AND_REPLACE
+```
+
+---
+
+## Directive Parameters
+
+Directives can accept parameters to modify their behavior. Parameters are specified in parentheses after the directive name.
+
+**Syntax:**
+```
+@Kif DIRECTIVE_NAME(param1=value1, param2=value2)
+```
+
+### Available Parameters
+
+#### SEARCH_AND_REPLACE Parameters
+
+**`replace_all`** (boolean, default: `false`)
+- When `true`, replaces all occurrences of the BEFORE block
+- When `false`, replaces only the first occurrence
+
+**`ignore_whitespace`** (boolean, default: `false`)
+- When `true`, ignores trailing whitespace on each line when matching
+- Useful when editors auto-trim whitespace
+
+**`fuzzy_match`** (boolean, default: `false`)
+- When `true`, uses fuzzy matching to find similar content
+- Reserved for future implementation
+
+**Example with Parameters:**
+```
+@Kif SEARCH_AND_REPLACE(replace_all=true, ignore_whitespace=true)
+@Kif BEFORE
+old code
+@Kif END_BEFORE
+@Kif AFTER
+new code
 @Kif END_AFTER
 @Kif END_SEARCH_AND_REPLACE
 ```
