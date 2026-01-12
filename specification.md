@@ -122,6 +122,13 @@ Directives can accept parameters to modify their behavior. Parameters are specif
 **`replace_all`** (boolean, default: `false`)
 - When `true`, replaces all occurrences of the BEFORE block
 - When `false`, replaces only the first occurrence
+- **Important**: Even when using regex, `replace_all=true` is required to replace all matches. Without it, only the first regex match will be replaced.
+
+**`count`** (integer, default: `1`)
+- Specifies the exact number of occurrences to replace
+- Only takes effect when `replace_all` is `false`
+- Cannot be used together with `replace_all=true` (replace_all takes priority)
+- Useful when you want to replace a specific number of occurrences but not all
 
 **`ignore_whitespace`** (boolean, default: `false`)
 - When `true`, ignores trailing whitespace on each line when matching
@@ -131,9 +138,14 @@ Directives can accept parameters to modify their behavior. Parameters are specif
 - When `true`, uses fuzzy matching to find similar content
 - Reserved for future implementation
 
+**`regex`** (boolean, default: `false`)
+- When `true`, treats the BEFORE block as a regular expression pattern
+- When `false`, treats the BEFORE block as literal text
+- Useful for pattern matching and replacement
+
 **Example with Parameters:**
 ```
-@Kif SEARCH_AND_REPLACE(replace_all=true, ignore_whitespace=true)
+@Kif SEARCH_AND_REPLACE(replace_all=true, ignore_whitespace=true, regex=true)
 @Kif BEFORE
 old code
 @Kif END_BEFORE
@@ -142,3 +154,23 @@ new code
 @Kif END_AFTER
 @Kif END_SEARCH_AND_REPLACE
 ```
+
+**Example with Count Parameter:**
+```
+@Kif SEARCH_AND_REPLACE(count=3)
+@Kif BEFORE
+old code
+@Kif END_BEFORE
+@Kif AFTER
+new code
+@Kif END_AFTER
+@Kif END_SEARCH_AND_REPLACE
+```
+
+Instructions for LLM: 
+
+1. For repetition, you can set replace_all to true when using SEARCH_AND_REPLACE to replace all occurrences of the BEFORE block.
+
+2. Use the count parameter to replace a specific number of occurrences.
+
+3. ONLY WRITE WHAT IS NEEDED. THE KIFDIFF IS FOR THIS VERY REASON SO THAT YOU DONT HAVE TO WRITE FULL FILES.

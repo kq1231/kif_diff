@@ -285,11 +285,17 @@ def search_and_replace(file_path, before_text, after_text, params, stats, line_n
 
     # Get parameters
     replace_all = params.get('replace_all', False)
+    count = params.get('count', 1)
     ignore_whitespace = params.get('ignore_whitespace', False)
     fuzzy_match = params.get('fuzzy_match', False)
+    use_regex = params.get('regex', False)
+    
+    # If replace_all is true, count is ignored
+    if replace_all:
+        count = None
     
     if args.verbose:
-        print(f"  Parameters: replace_all={replace_all}, ignore_whitespace={ignore_whitespace}")
+        print(f"  Parameters: replace_all={replace_all}, count={count}, ignore_whitespace={ignore_whitespace}, regex={use_regex}")
 
     try:
         with open(file_path, 'r') as f:
@@ -299,7 +305,32 @@ def search_and_replace(file_path, before_text, after_text, params, stats, line_n
         search_before = normalize_whitespace(before_text) if ignore_whitespace else before_text
         search_content = normalize_whitespace(content) if ignore_whitespace else content
 
-        if search_before not in search_content:
+        # Check for matches
+        matches_found = False
+        match_count = 0
+        match_positions = []
+        
+        if use_regex:
+            try:
+                pattern = re.compile(search_before, re.MULTILINE | re.DOTALL)
+                matches = list(pattern.finditer(search_content))
+                match_count = len(matches)
+                matches_found = match_count > 0
+                match_positions = [m.start() for m in matches]
+                if args.verbose and matches_found:
+                    print(f"  Regex pattern matched {match_count} occurrence(s)")
+            except re.error as e:
+                print_error(f"ERROR: Invalid regex pattern: {e}")
+                stats.failed += 1
+                return
+        else:
+            matches_found = search_before in search_content
+            match_count = search_content.count(search_before)
+            if matches_found:
+                match_positions = [i for i in range(len(search_content)) 
+                                 if search_content.startswith(search_before, i)]
+
+        if not matches_found:
             print_error(f"ERROR: 'BEFORE' block not found in '{file_path}'.")
             print("\n" + "="*60)
             print_warning("BEFORE block that wasn't found:")
@@ -332,17 +363,16 @@ def search_and_replace(file_path, before_text, after_text, params, stats, line_n
 
         if args.dry_run:
             print_warning("DRY RUN: Would modify file (no changes made)")
-            occurrences = search_content.count(search_before)
-            print(f"  Found {occurrences} occurrence(s)")
+            print(f"  Found {match_count} occurrence(s)")
             if replace_all:
-                print(f"  Would replace all {occurrences} occurrence(s)")
+                print(f"  Would replace all {match_count} occurrence(s)")
             else:
                 print("  Would replace first occurrence only")
             stats.skipped += 1
             return
         
         if args.interactive:
-            preview_start = search_content.index(search_before)
+            preview_start = match_positions[0]
             preview = content[max(0, preview_start-50):preview_start+len(before_text)+50]
             print("\nContext preview:")
             print("-" * 60)
@@ -359,15 +389,43 @@ def search_and_replace(file_path, before_text, after_text, params, stats, line_n
             backup_file(file_path)
 
         # Perform replacement
-        if replace_all:
-            new_content = content.replace(before_text, after_text)
-            occurrences = content.count(before_text)
-            if args.verbose:
-                print(f"  Replaced {occurrences} occurrence(s)")
+        if use_regex:
+            if replace_all:
+                new_content = pattern.sub(after_text, content)
+                if args.verbose:
+                    print(f"  Replaced {match_count} occurrence(s) using regex")
+            else:
+                # Use count parameter (default 1)
+                new_content = pattern.sub(after_text, content, count=count)
+                if args.verbose:
+                    print(f"  Replaced {count} occurrence(s) using regex")
         else:
-            new_content = content.replace(before_text, after_text, 1)
-            if args.verbose:
-                print("  Replaced first occurrence")
+            if replace_all:
+                new_content = content.replace(before_text, after_text)
+                if args.verbose:
+                    print(f"  Replaced {match_count} occurrence(s)")
+            else:
+                # For literal text replacement, we need to handle count manually
+                if count == 1:
+                    new_content = content.replace(before_text, after_text, 1)
+                else:
+                    # Replace count occurrences manually
+                    parts = []
+                    remaining = content
+                    replaced = 0
+                    
+                    while replaced < count and before_text in remaining:
+                        index = remaining.find(before_text)
+                        parts.append(remaining[:index])
+                        parts.append(after_text)
+                        remaining = remaining[index + len(before_text):]
+                        replaced += 1
+                    
+                    parts.append(remaining)
+                    new_content = ''.join(parts)
+                
+                if args.verbose:
+                    print(f"  Replaced {count} occurrence(s)")
 
         with open(file_path, 'w') as f:
             f.write(new_content)
