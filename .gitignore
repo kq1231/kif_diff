@@ -1,2 +1,5 @@
-.kifdiff
+# Ignore KifDiff backup directory
 .kif_backups
+
+# Ignore tmp
+tmp
