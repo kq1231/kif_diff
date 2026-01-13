@@ -126,7 +126,7 @@ Reads the contents of a file and copies them to the clipboard along with the fil
 
 ### 5. Directory Tree
 
-Displays a visual tree structure of a directory's contents.
+Displays a visual tree structure of a directory's contents. This is useful for LLMs that need to examine the structure of a project, directory, etc.
 
 **Syntax:**
 ```

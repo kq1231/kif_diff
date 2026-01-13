@@ -516,7 +516,7 @@ def read_file_to_clipboard(file_path, stats, line_num=0):
         stats.failed += 1
 
 def show_directory_tree(dir_path, params, stats, line_num=0):
-    """Displays directory tree structure."""
+    """Displays directory tree structure and copies it to clipboard."""
     print_info(f"[Line {line_num}] TREE: Showing tree for '{dir_path}'...")
     
     if not os.path.exists(dir_path):
@@ -566,20 +566,45 @@ def show_directory_tree(dir_path, params, stats, line_num=0):
     
     tree_lines = [dir_path]
     tree_lines.extend(get_tree_structure(dir_path))
+    tree_output = '\n'.join(tree_lines)
     
     if args.dry_run:
-        print_warning("DRY RUN: Would display tree (no output shown)")
+        print_warning("DRY RUN: Would copy tree to clipboard (no changes made)")
         stats.skipped += 1
         return
     
-    print("\n" + "="*60)
-    print_tree("DIRECTORY TREE")
-    print("="*60)
-    for line in tree_lines:
-        print_tree(line)
-    print("="*60 + "\n")
-    
-    stats.modified += 1
+    # Try to import pyperclip for clipboard operations
+    try:
+        import pyperclip
+        
+        # Format content with directory path
+        formatted_content = f"===== DIRECTORY TREE: {dir_path} =====\n{tree_output}\n\n"
+        
+        # Check if we already have content in clipboard
+        try:
+            existing_content = pyperclip.paste()
+            # Only append if the existing content doesn't already include this directory
+            if existing_content and dir_path not in existing_content:
+                new_content = existing_content + formatted_content
+            else:
+                new_content = formatted_content
+        except:
+            new_content = formatted_content
+        
+        # Copy to clipboard
+        pyperclip.copy(new_content)
+        print_success(f"TREE: Directory tree copied to clipboard.")
+        stats.modified += 1
+    except ImportError:
+        print_error("ERROR: pyperclip module not installed. Install it with 'pip install pyperclip'")
+        print("Falling back to printing tree structure:")
+        print("\n" + "="*60)
+        print_tree("DIRECTORY TREE")
+        print("="*60)
+        for line in tree_lines:
+            print_tree(line)
+        print("="*60 + "\n")
+        stats.modified += 1
 
 def rollback_backups(backup_dir=".kif_backups", session_name=None):
     """Restore all files from backups."""
@@ -833,7 +858,7 @@ Directives:
   @Kif CREATE                                 # Create a new file
   @Kif DELETE                                 # Delete the target file
   @Kif READ <path>                            # Read file content to clipboard
-  @Kif TREE <dir>                             # Show directory tree structure
+  @Kif TREE <dir>                             # Copy directory tree structure to clipboard
   @Kif SEARCH_AND_REPLACE                     # Replace content in file
 
 Directive Parameters:
@@ -851,6 +876,7 @@ Directive Parameters:
     - depth: Maximum depth to display (default: unlimited)
     - show_hidden: Show hidden files/directories (default: false)
     - include_files: Show files in tree (default: true)
+    - Note: Tree structure is copied to clipboard, not displayed
         """
     )
 
