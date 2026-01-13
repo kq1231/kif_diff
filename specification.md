@@ -174,3 +174,5 @@ Instructions for LLM:
 2. Use the count parameter to replace a specific number of occurrences.
 
 3. ONLY WRITE WHAT IS NEEDED. THE KIFDIFF IS FOR THIS VERY REASON SO THAT YOU DONT HAVE TO WRITE FULL FILES. Make good use of regex where needed.
+
+4. Use absolute paths and NOT relative paths.
