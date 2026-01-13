@@ -206,5 +206,30 @@ def parse_kifdiff(file_path, stats=None, args=None):
             buffer.append(line)
 
     print_info("\n--- KifDiff processing complete. ---")
+
+    # Copy accumulated clipboard buffer to clipboard
+    if stats.clipboard_buffer:
+        try:
+            import pyperclip
+            combined_content = ''.join(stats.clipboard_buffer)
+            pyperclip.copy(combined_content)
+
+            total_items = len(stats.clipboard_files) + len(stats.clipboard_dirs) + len(stats.clipboard_errors)
+            from utils.output import print_success, print_warning
+            print_success(f"\nClipboard: Copied {total_items} item(s) to clipboard:")
+            if stats.clipboard_files:
+                print(f"  - {len(stats.clipboard_files)} file(s) read")
+            if stats.clipboard_dirs:
+                print(f"  - {len(stats.clipboard_dirs)} directory tree(s)")
+            if stats.clipboard_errors:
+                print_warning(f"  - {len(stats.clipboard_errors)} error(s)")
+        except ImportError:
+            from utils.output import print_error
+            print_error("\nERROR: pyperclip module not installed. Install it with 'pip install pyperclip'")
+            print("Content that would have been copied to clipboard:")
+            print("="*60)
+            print(''.join(stats.clipboard_buffer))
+            print("="*60)
+
     stats.print_summary()
     return stats

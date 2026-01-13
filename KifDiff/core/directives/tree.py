@@ -14,36 +14,22 @@ class TreeDirective:
             error_msg = f"ERROR: Directory '{dir_path}' not found. Skipping."
             print_error(error_msg)
             stats.failed += 1
-            
-            # Copy error to clipboard
-            try:
-                import pyperclip
-                formatted_error = f"===== TREE ERROR: {dir_path} =====\n{error_msg}\n\n"
-                
-                # Copy to clipboard (replace, not append)
-                pyperclip.copy(formatted_error)
-                print_warning("TREE: Error message copied to clipboard.")
-                stats.clipboard_errors.append(f"TREE: {dir_path}")
-            except ImportError:
-                pass  # Silently ignore if pyperclip not available for errors
+
+            # Append error to clipboard buffer
+            formatted_error = f"===== TREE ERROR: {dir_path} =====\n{error_msg}\n\n"
+            stats.clipboard_buffer.append(formatted_error)
+            stats.clipboard_errors.append(f"TREE: {dir_path}")
             return False
         
         if not os.path.isdir(dir_path):
             error_msg = f"ERROR: '{dir_path}' is not a directory. Skipping."
             print_error(error_msg)
             stats.failed += 1
-            
-            # Copy error to clipboard
-            try:
-                import pyperclip
-                formatted_error = f"===== TREE ERROR: {dir_path} =====\n{error_msg}\n\n"
-                
-                # Copy to clipboard (replace, not append)
-                pyperclip.copy(formatted_error)
-                print_warning("TREE: Error message copied to clipboard.")
-                stats.clipboard_errors.append(f"TREE: {dir_path}")
-            except ImportError:
-                pass  # Silently ignore if pyperclip not available for errors
+
+            # Append error to clipboard buffer
+            formatted_error = f"===== TREE ERROR: {dir_path} =====\n{error_msg}\n\n"
+            stats.clipboard_buffer.append(formatted_error)
+            stats.clipboard_errors.append(f"TREE: {dir_path}")
             return False
         
         # Get parameters
@@ -89,28 +75,11 @@ class TreeDirective:
             print_warning("DRY RUN: Would copy tree to clipboard (no changes made)")
             stats.skipped += 1
             return True
-        
-        # Try to import pyperclip for clipboard operations
-        try:
-            import pyperclip
-            
-            # Format content with directory path
-            formatted_content = f"===== DIRECTORY TREE: {dir_path} =====\n{tree_output}\n\n"
-            
-            # Copy to clipboard (replace, not append)
-            pyperclip.copy(formatted_content)
-            print_success("TREE: Directory tree copied to clipboard.")
-            stats.clipboard_dirs.append(dir_path)
-            stats.modified += 1
-            return True
-        except ImportError:
-            print_error("ERROR: pyperclip module not installed. Install it with 'pip install pyperclip'")
-            print("Falling back to printing tree structure:")
-            print("\n" + "="*60)
-            print_tree("DIRECTORY TREE")
-            print("="*60)
-            for line in tree_lines:
-                print_tree(line)
-            print("="*60 + "\n")
-            stats.modified += 1
-            return True
+
+        # Format content with directory path and append to buffer
+        formatted_content = f"===== DIRECTORY TREE: {dir_path} =====\n{tree_output}\n\n"
+        stats.clipboard_buffer.append(formatted_content)
+        print_success("TREE: Directory tree added to clipboard buffer.")
+        stats.clipboard_dirs.append(dir_path)
+        stats.modified += 1
+        return True

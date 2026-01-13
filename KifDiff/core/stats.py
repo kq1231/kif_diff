@@ -11,6 +11,7 @@ class Stats:
         self.clipboard_files = []  # Track files copied to clipboard
         self.clipboard_dirs = []   # Track directories copied to clipboard
         self.clipboard_errors = []  # Track errors copied to clipboard
+        self.clipboard_buffer = []  # Accumulate all clipboard content
     
     def print_summary(self):
         """Print operation summary."""
