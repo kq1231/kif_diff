@@ -8,6 +8,7 @@ from .directives import (
     FileDirective, CreateDirective, DeleteDirective, MoveDirective,
     ReadDirective, TreeDirective, SearchReplaceDirective, DirectiveParams
 )
+from .directives.overwrite import OverwriteDirective
 from utils.output import print_info
 
 
@@ -37,6 +38,7 @@ def parse_kifdiff(file_path, stats=None, args=None):
     # Initialize directive handlers
     file_directive = FileDirective()
     create_directive = CreateDirective()
+    overwrite_directive = OverwriteDirective()
     delete_directive = DeleteDirective()
     move_directive = MoveDirective()
     read_directive = ReadDirective()
@@ -45,6 +47,7 @@ def parse_kifdiff(file_path, stats=None, args=None):
 
     current_file = None
     create_file_path = None
+    overwrite_file_path = None
     mode = None
     buffer = []
     current_params = DirectiveParams()
@@ -105,6 +108,38 @@ def parse_kifdiff(file_path, stats=None, args=None):
         elif stripped_line == "@Kif END_CREATE":
             if mode == "CREATE":
                 create_directive.execute(create_file_path, "".join(buffer), stats, directive_line, args)
+                mode = None
+            continue
+
+        # OVERWRITE_FILE directive
+        if stripped_line.startswith("@Kif OVERWRITE_FILE"):
+            mode = "OVERWRITE_FILE"
+            buffer = []
+            directive_line = i
+
+            # Extract file path from OVERWRITE_FILE directive
+            # Format: @Kif OVERWRITE_FILE <file_path>
+            parts = stripped_line.split(" ", 2)
+            if len(parts) >= 3:
+                overwrite_file_path = parts[2].strip()
+            else:
+                # No file path in OVERWRITE_FILE directive - this is an error
+                from utils.output import print_error
+                print_error(f"ERROR: No file path specified for OVERWRITE_FILE at line {i}. Use: @Kif OVERWRITE_FILE <file_path>")
+                stats.failed += 1
+                mode = None
+                continue
+
+            if not overwrite_file_path:
+                from utils.output import print_error
+                print_error(f"ERROR: No file path specified for OVERWRITE_FILE at line {i}. Use: @Kif OVERWRITE_FILE <file_path>")
+                stats.failed += 1
+                mode = None
+                continue
+            continue
+        elif stripped_line == "@Kif END_OVERWRITE_FILE":
+            if mode == "OVERWRITE_FILE":
+                overwrite_directive.execute(overwrite_file_path, "".join(buffer), stats, directive_line, args)
                 mode = None
             continue
 

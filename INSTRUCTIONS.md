@@ -133,7 +133,41 @@ class AppConstants {
 
 ---
 
-### 2. Delete File
+### 2. Overwrite File
+
+Completely replaces the contents of an existing file (or creates it if it doesn't exist).
+
+**Syntax:**
+```
+@Kif OVERWRITE_FILE <absolute_path>
+... (new file content) ...
+@Kif END_OVERWRITE_FILE
+```
+
+**Important:**
+- Use **absolute paths** directly in the OVERWRITE_FILE directive
+- Does NOT require `@Kif FILE` directive
+- Automatically backs up the existing file before overwriting
+- Creates the file if it doesn't exist
+- More efficient than DELETE + CREATE when replacing most of a file's content
+
+**When to use OVERWRITE_FILE vs SEARCH_AND_REPLACE:**
+- Use `OVERWRITE_FILE` when replacing more than 80% of a file's content
+- Use `SEARCH_AND_REPLACE` for targeted changes to specific sections
+
+**Example:**
+```
+@Kif OVERWRITE_FILE /home/user/project/lib/config.dart
+class Config {
+  static const String apiUrl = 'https://api.example.com';
+  static const int timeout = 30;
+}
+@Kif END_OVERWRITE_FILE
+```
+
+---
+
+### 3. Delete File
 
 Deletes a file (automatically backed up).
 
@@ -151,7 +185,7 @@ Deletes a file (automatically backed up).
 
 ---
 
-### 3. Move/Rename File or Directory
+### 4. Move/Rename File or Directory
 
 Moves or renames files and directories (automatically backed up).
 
@@ -190,7 +224,7 @@ Moves or renames files and directories (automatically backed up).
 
 ---
 
-### 4. Search and Replace
+### 5. Search and Replace
 
 Finds and replaces text blocks. **Most powerful operation.**
 
@@ -299,19 +333,16 @@ Before making any changes, understand the codebase structure.
 ### 2. Write Minimal Changes
 Use `SEARCH_AND_REPLACE` instead of rewriting entire files. Only include the specific code blocks that need modification.
 
-**Exception:** When the new content is drastically smaller than the original file, use `DELETE` + `CREATE` instead of multiple `SEARCH_AND_REPLACE` operations.
+**Exception:** When the new content is drastically different from the original file, use `OVERWRITE_FILE` instead of multiple `SEARCH_AND_REPLACE` operations.
 
 **Example scenario:** If a file currently has 1000 lines but the new version only needs 10 lines, it's more efficient to:
 ```kifdiff
-@Kif FILE /path/to/large_file.dart
-@Kif DELETE
-
-@Kif CREATE /path/to/large_file.dart
+@Kif OVERWRITE_FILE /path/to/large_file.dart
 ... (new 10 lines of content) ...
-@Kif END_CREATE
+@Kif END_OVERWRITE_FILE
 ```
 
-Rather than using multiple `SEARCH_AND_REPLACE` operations to remove most of the content. Use your judgment: if you're removing more than 80% of a file's content, DELETE + CREATE is usually better.
+Rather than using multiple `SEARCH_AND_REPLACE` operations to remove most of the content. Use your judgment: if you're replacing more than 80% of a file's content, `OVERWRITE_FILE` is usually better.
 
 ### 3. Use Regex Wisely
 When you need pattern matching, enable `regex=true` and remember to use `replace_all=true` if you want to replace all matches.
