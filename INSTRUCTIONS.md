@@ -51,10 +51,10 @@ Once you provide the results, I'll create the execution file with the necessary 
 ### `@Kif FILE <absolute_path>`
 Specifies the target file for subsequent operations.
 
-**Important:** 
+**Important:**
 - Use **absolute paths**, not relative paths
-- Required for: `CREATE`, `DELETE`, `SEARCH_AND_REPLACE`
-- Not required for: `READ`, `TREE`
+- Required for: `DELETE`, `SEARCH_AND_REPLACE`
+- Not required for: `CREATE`, `READ`, `TREE`, `MOVE` (these directives specify their own file paths)
 
 **Example:**
 ```
@@ -110,16 +110,20 @@ Creates a new file (overwrites if exists).
 
 **Syntax:**
 ```
-@Kif FILE <absolute_path>
-@Kif CREATE
+@Kif CREATE <absolute_path>
 ... (file content) ...
 @Kif END_CREATE
 ```
 
+**Important:**
+- Use **absolute paths** directly in the CREATE directive
+- Does NOT require `@Kif FILE` directive
+- Creates parent directories automatically if they don't exist
+- Overwrites the file if it already exists (automatically backed up)
+
 **Example:**
 ```
-@Kif FILE /home/user/project/lib/constants.dart
-@Kif CREATE
+@Kif CREATE /home/user/project/lib/constants.dart
 class AppConstants {
   static const String appName = 'My Awesome App';
   static const double defaultPadding = 16.0;
@@ -147,7 +151,46 @@ Deletes a file (automatically backed up).
 
 ---
 
-### 3. Search and Replace
+### 3. Move/Rename File or Directory
+
+Moves or renames files and directories (automatically backed up).
+
+**Syntax:**
+```
+@Kif MOVE <source_path> <destination_path>
+```
+
+**Important:**
+- Use **absolute paths** for both source and destination
+- Does NOT require `@Kif FILE` directive
+- Works for both files and directories
+- Automatically creates destination directories if they don't exist
+- Source file/directory is backed up before moving
+
+**Use Cases:**
+- Rename a file: `@Kif MOVE /path/old_name.dart /path/new_name.dart`
+- Move to different directory: `@Kif MOVE /path/file.dart /new/path/file.dart`
+- Rename and move: `@Kif MOVE /old/path/old_name.dart /new/path/new_name.dart`
+- Move entire directory: `@Kif MOVE /old/dir /new/dir`
+
+**Examples:**
+```
+# Rename a file
+@Kif MOVE /home/user/project/lib/old_utils.dart /home/user/project/lib/new_utils.dart
+
+# Move file to different directory
+@Kif MOVE /home/user/project/lib/utils.dart /home/user/project/lib/helpers/utils.dart
+
+# Move and rename
+@Kif MOVE /home/user/project/lib/old_name.dart /home/user/project/lib/core/new_name.dart
+
+# Move entire directory
+@Kif MOVE /home/user/project/lib/old_widgets /home/user/project/lib/components
+```
+
+---
+
+### 4. Search and Replace
 
 Finds and replaces text blocks. **Most powerful operation.**
 
@@ -256,6 +299,20 @@ Before making any changes, understand the codebase structure.
 ### 2. Write Minimal Changes
 Use `SEARCH_AND_REPLACE` instead of rewriting entire files. Only include the specific code blocks that need modification.
 
+**Exception:** When the new content is drastically smaller than the original file, use `DELETE` + `CREATE` instead of multiple `SEARCH_AND_REPLACE` operations.
+
+**Example scenario:** If a file currently has 1000 lines but the new version only needs 10 lines, it's more efficient to:
+```kifdiff
+@Kif FILE /path/to/large_file.dart
+@Kif DELETE
+
+@Kif CREATE /path/to/large_file.dart
+... (new 10 lines of content) ...
+@Kif END_CREATE
+```
+
+Rather than using multiple `SEARCH_AND_REPLACE` operations to remove most of the content. Use your judgment: if you're removing more than 80% of a file's content, DELETE + CREATE is usually better.
+
 ### 3. Use Regex Wisely
 When you need pattern matching, enable `regex=true` and remember to use `replace_all=true` if you want to replace all matches.
 
@@ -265,8 +322,8 @@ The BEFORE block must match exactly. If unsure about whitespace, use `ignore_whi
 ### 5. Use Absolute Paths
 Never use relative paths. Always specify the full path from the project root.
 
-### 6. Multiple Files
-You can operate on multiple files in a single `.kifdiff`:
+### 6. Multiple Files and Operations
+You can operate on multiple files and use different operations in a single `.kifdiff`:
 ```
 @Kif FILE /path/to/first.dart
 @Kif SEARCH_AND_REPLACE
@@ -277,6 +334,11 @@ You can operate on multiple files in a single `.kifdiff`:
 @Kif SEARCH_AND_REPLACE
 ...
 @Kif END_SEARCH_AND_REPLACE
+
+@Kif MOVE /path/to/old_file.dart /path/to/new_location/new_file.dart
+
+@Kif FILE /path/to/third.dart
+@Kif DELETE
 ```
 
 ---
