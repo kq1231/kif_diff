@@ -459,6 +459,55 @@ def list_backup_sessions(backup_dir=".kif_backups"):
     sessions.sort(key=lambda x: x["name"], reverse=True)
     return sessions
 
+def read_file_to_clipboard(file_path, stats, line_num=0):
+    """Reads a file and copies its contents with file path to clipboard."""
+    print_info(f"[Line {line_num}] READ: Reading file '{file_path}'...")
+    
+    if not os.path.exists(file_path):
+        print_error(f"ERROR: File '{file_path}' not found. Skipping.")
+        stats.failed += 1
+        return
+    
+    try:
+        with open(file_path, 'r') as f:
+            content = f.read()
+        
+        # Try to import pyperclip for clipboard operations
+        try:
+            import pyperclip
+            
+            # Format content with file path
+            formatted_content = f"===== FILE: {file_path} =====\n{content}\n\n"
+            
+            # Check if we already have content in clipboard
+            try:
+                existing_content = pyperclip.paste()
+                # Only append if the existing content doesn't already include this file
+                if existing_content and file_path not in existing_content:
+                    new_content = existing_content + formatted_content
+                else:
+                    new_content = formatted_content
+            except:
+                new_content = formatted_content
+            
+            # Copy to clipboard
+            pyperclip.copy(new_content)
+            print_success(f"READ: File content copied to clipboard.")
+            stats.modified += 1
+        except ImportError:
+            print_error("ERROR: pyperclip module not installed. Install it with 'pip install pyperclip'")
+            print("Falling back to printing file content:")
+            print("\n" + "="*60)
+            print(f"FILE: {file_path}")
+            print("="*60)
+            print(content)
+            print("="*60 + "\n")
+            stats.modified += 1
+            
+    except IOError as e:
+        print_error(f"ERROR: Could not read file '{file_path}'. Reason: {e}")
+        stats.failed += 1
+
 def rollback_backups(backup_dir=".kif_backups", session_name=None):
     """Restore all files from backups."""
     
@@ -610,6 +659,11 @@ def parse_kifdiff(file_path, stats=None):
         if stripped_line.startswith("@Kif DELETE"):
             directive_line = i
             delete_file(current_file, stats, directive_line)
+            continue
+            
+        if stripped_line.startswith("@Kif READ"):
+            directive_line = i
+            read_file_to_clipboard(current_file, stats, directive_line)
             continue
 
         if stripped_line.startswith("@Kif SEARCH_AND_REPLACE"):

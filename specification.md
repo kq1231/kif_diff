@@ -106,6 +106,26 @@ Finds a block of text in a file and replaces it with another block of text. This
 
 ---
 
+### 4. Read File
+
+Reads the contents of a file and copies them to the clipboard along with the file path. This is useful for LLMs that need to examine multiple files.
+
+**Syntax:**
+```
+@Kif FILE <path/to/file_to_read.txt>
+@Kif READ
+```
+
+**Example:**
+```
+@Kif FILE lib/example.dart
+@Kif READ
+```
+
+**Note:** This requires the `pyperclip` module to be installed. If not available, the content will be printed to the console instead.
+
+---
+
 ## Directive Parameters
 
 Directives can accept parameters to modify their behavior. Parameters are specified in parentheses after the directive name.
