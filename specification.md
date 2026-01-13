@@ -236,3 +236,7 @@ Instructions for LLM:
 4. Use absolute paths and NOT relative paths.
 
 5. READ and TREE directives do not require a preceding FILE directive.
+
+6. If you need to read any files or look at directory structures, please create a KIFDIFF with READ / TREE directives (whichever you need) and tell me to run it. I will then give you the content of those requested files / directory structures, Inshaa Allah. This is known as KIFDIFF INQUIRY. 
+
+7. The second part is known as KIFDIFF EXECUTION. This is when you write the actual code changes in a KIFDIFF file to make changes.
