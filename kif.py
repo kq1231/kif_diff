@@ -19,6 +19,60 @@ except ImportError:
     class Style:
         RESET_ALL = BRIGHT = ""
 
+# OS Notification support
+def show_notification(title, message, notification_type="info"):
+    """Show OS notification."""
+    try:
+        import platform
+        system = platform.system()
+        
+        if system == "Darwin":  # macOS
+            # Use osascript for macOS notifications
+            import subprocess
+            # Map notification type to sound name
+            sound_map = {
+                "success": "Glass",
+                "error": "Basso", 
+                "warning": "Ping",
+                "info": "Pop"
+            }
+            sound = sound_map.get(notification_type, "Pop")
+            
+            cmd = [
+                'osascript', '-e',
+                f'display notification "{message}" with title "{title}" sound name "{sound}"'
+            ]
+            subprocess.run(cmd, check=True, capture_output=True)
+            
+        elif system == "Linux":
+            # Use notify-send for Linux
+            import subprocess
+            urgency_map = {
+                "success": "normal",
+                "error": "critical",
+                "warning": "normal", 
+                "info": "low"
+            }
+            urgency = urgency_map.get(notification_type, "normal")
+            
+            cmd = ['notify-send', '-u', urgency, title, message]
+            subprocess.run(cmd, check=True)
+            
+        elif system == "Windows":
+            # Try to use win10toast for Windows
+            try:
+                from win10toast import ToastNotifier
+                toast = ToastNotifier()
+                toast.show_toast(title, message, duration=3, threaded=True)
+            except ImportError:
+                # Fallback: no notification on Windows without win10toast
+                pass
+                
+    except Exception as e:
+        # Silently fail if notifications don't work
+        if args.verbose:
+            print_warning(f"Could not show notification: {e}")
+
 def print_success(msg):
     """Print success message in green."""
     if COLOR_SUPPORT:
@@ -62,6 +116,9 @@ class Stats:
         self.modified = 0
         self.failed = 0
         self.skipped = 0
+        self.clipboard_files = []  # Track files copied to clipboard
+        self.clipboard_dirs = []   # Track directories copied to clipboard
+        self.clipboard_errors = []  # Track errors copied to clipboard
     
     def print_summary(self):
         """Print operation summary."""
@@ -471,8 +528,21 @@ def read_file_to_clipboard(file_path, stats, line_num=0):
     print_info(f"[Line {line_num}] READ: Reading file '{file_path}'...")
     
     if not os.path.exists(file_path):
-        print_error(f"ERROR: File '{file_path}' not found. Skipping.")
+        error_msg = f"ERROR: File '{file_path}' not found. Skipping."
+        print_error(error_msg)
         stats.failed += 1
+        
+        # Copy error to clipboard
+        try:
+            import pyperclip
+            formatted_error = f"===== READ ERROR: {file_path} =====\n{error_msg}\n\n"
+            
+            # Copy to clipboard (replace, not append)
+            pyperclip.copy(formatted_error)
+            print_warning("READ: Error message copied to clipboard.")
+            stats.clipboard_errors.append(f"READ: {file_path}")
+        except ImportError:
+            pass  # Silently ignore if pyperclip not available for errors
         return
     
     try:
@@ -486,20 +556,10 @@ def read_file_to_clipboard(file_path, stats, line_num=0):
             # Format content with file path
             formatted_content = f"===== FILE: {file_path} =====\n{content}\n\n"
             
-            # Check if we already have content in clipboard
-            try:
-                existing_content = pyperclip.paste()
-                # Only append if the existing content doesn't already include this file
-                if existing_content and file_path not in existing_content:
-                    new_content = existing_content + formatted_content
-                else:
-                    new_content = formatted_content
-            except:
-                new_content = formatted_content
-            
-            # Copy to clipboard
-            pyperclip.copy(new_content)
-            print_success(f"READ: File content copied to clipboard.")
+            # Copy to clipboard (replace, not append)
+            pyperclip.copy(formatted_content)
+            print_success("READ: File content copied to clipboard.")
+            stats.clipboard_files.append(file_path)
             stats.modified += 1
         except ImportError:
             print_error("ERROR: pyperclip module not installed. Install it with 'pip install pyperclip'")
@@ -512,21 +572,60 @@ def read_file_to_clipboard(file_path, stats, line_num=0):
             stats.modified += 1
             
     except IOError as e:
-        print_error(f"ERROR: Could not read file '{file_path}'. Reason: {e}")
+        error_msg = f"ERROR: Could not read file '{file_path}'. Reason: {e}"
+        print_error(error_msg)
         stats.failed += 1
+        
+        # Copy error to clipboard
+        try:
+            import pyperclip
+            formatted_error = f"===== READ ERROR: {file_path} =====\n{error_msg}\n\n"
+            
+            # Copy to clipboard (replace, not append)
+            pyperclip.copy(formatted_error)
+            print_warning("READ: Error message copied to clipboard.")
+            stats.clipboard_errors.append(f"READ: {file_path}")
+        except ImportError:
+            pass  # Silently ignore if pyperclip not available for errors
 
 def show_directory_tree(dir_path, params, stats, line_num=0):
     """Displays directory tree structure and copies it to clipboard."""
     print_info(f"[Line {line_num}] TREE: Showing tree for '{dir_path}'...")
     
     if not os.path.exists(dir_path):
-        print_error(f"ERROR: Directory '{dir_path}' not found. Skipping.")
+        error_msg = f"ERROR: Directory '{dir_path}' not found. Skipping."
+        print_error(error_msg)
         stats.failed += 1
+        
+        # Copy error to clipboard
+        try:
+            import pyperclip
+            formatted_error = f"===== TREE ERROR: {dir_path} =====\n{error_msg}\n\n"
+            
+            # Copy to clipboard (replace, not append)
+            pyperclip.copy(formatted_error)
+            print_warning("TREE: Error message copied to clipboard.")
+            stats.clipboard_errors.append(f"TREE: {dir_path}")
+        except ImportError:
+            pass  # Silently ignore if pyperclip not available for errors
         return
     
     if not os.path.isdir(dir_path):
-        print_error(f"ERROR: '{dir_path}' is not a directory. Skipping.")
+        error_msg = f"ERROR: '{dir_path}' is not a directory. Skipping."
+        print_error(error_msg)
         stats.failed += 1
+        
+        # Copy error to clipboard
+        try:
+            import pyperclip
+            formatted_error = f"===== TREE ERROR: {dir_path} =====\n{error_msg}\n\n"
+            
+            # Copy to clipboard (replace, not append)
+            pyperclip.copy(formatted_error)
+            print_warning("TREE: Error message copied to clipboard.")
+            stats.clipboard_errors.append(f"TREE: {dir_path}")
+        except ImportError:
+            pass  # Silently ignore if pyperclip not available for errors
         return
     
     # Get parameters
@@ -580,20 +679,10 @@ def show_directory_tree(dir_path, params, stats, line_num=0):
         # Format content with directory path
         formatted_content = f"===== DIRECTORY TREE: {dir_path} =====\n{tree_output}\n\n"
         
-        # Check if we already have content in clipboard
-        try:
-            existing_content = pyperclip.paste()
-            # Only append if the existing content doesn't already include this directory
-            if existing_content and dir_path not in existing_content:
-                new_content = existing_content + formatted_content
-            else:
-                new_content = formatted_content
-        except:
-            new_content = formatted_content
-        
-        # Copy to clipboard
-        pyperclip.copy(new_content)
-        print_success(f"TREE: Directory tree copied to clipboard.")
+        # Copy to clipboard (replace, not append)
+        pyperclip.copy(formatted_content)
+        print_success("TREE: Directory tree copied to clipboard.")
+        stats.clipboard_dirs.append(dir_path)
         stats.modified += 1
     except ImportError:
         print_error("ERROR: pyperclip module not installed. Install it with 'pip install pyperclip'")
@@ -973,6 +1062,9 @@ Directive Parameters:
         total_stats.modified += stats.modified
         total_stats.failed += stats.failed
         total_stats.skipped += stats.skipped
+        total_stats.clipboard_files += stats.clipboard_files
+        total_stats.clipboard_dirs += stats.clipboard_dirs
+        total_stats.clipboard_errors += stats.clipboard_errors
     
     # Print total stats if multiple files
     if len(args.diff_file) > 1:
@@ -980,6 +1072,55 @@ Directive Parameters:
         print_info("TOTAL SUMMARY FOR ALL FILES")
         print(f"{'='*60}")
         total_stats.print_summary()
+    
+    # Show final notification for clipboard operations
+    if total_stats.clipboard_files or total_stats.clipboard_dirs or total_stats.clipboard_errors:
+        files_count = len(total_stats.clipboard_files)
+        dirs_count = len(total_stats.clipboard_dirs)
+        errors_count = len(total_stats.clipboard_errors)
+        
+        # Build the message based on what was copied
+        message_parts = []
+        
+        if files_count > 0:
+            files_list = [os.path.basename(f) for f in total_stats.clipboard_files[:3]]  # Show max 3 files
+            if files_count > 3:
+                files_list.append(f"... and {files_count - 3} more")
+            files_msg = ", ".join(files_list)
+            message_parts.append(f"{files_count} file(s)")
+            if files_count <= 3:
+                message_parts[-1] += f": {files_msg}"
+        
+        if dirs_count > 0:
+            dirs_list = [os.path.basename(d) for d in total_stats.clipboard_dirs[:3]]  # Show max 3 dirs
+            if dirs_count > 3:
+                dirs_list.append(f"... and {dirs_count - 3} more")
+            dirs_msg = ", ".join(dirs_list)
+            message_parts.append(f"{dirs_count} director(y/ies)")
+            if dirs_count <= 3:
+                message_parts[-1] += f": {dirs_msg}"
+        
+        if errors_count > 0:
+            message_parts.append(f"{errors_count} error(s)")
+        
+        # Set title and notification type based on what happened
+        if errors_count > 0 and (files_count > 0 or dirs_count > 0):
+            title = "KifDiff - Partial Success"
+            notification_type = "warning"
+        elif errors_count > 0:
+            title = "KifDiff - Errors Only"
+            notification_type = "error"
+        else:
+            title = "KifDiff - Success"
+            notification_type = "success"
+        
+        # Build the final message
+        if len(message_parts) == 1:
+            message = f"Copied {message_parts[0]} to clipboard."
+        else:
+            message = f"Copied {', '.join(message_parts[:-1])} and {message_parts[-1]} to clipboard."
+        
+        show_notification(title, message, notification_type)
     
     # Git integration
     if args.git_commit and not args.dry_run:
