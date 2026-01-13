@@ -44,7 +44,7 @@ class AppConstants {
 
 ### 2. Delete File
 
-Deletes the specified file from the filesystem. **Note:** Files are automatically backed up before deletion (unless `--no-backup` is used).
+Deletes the specified file from the filesystem. **Note:** Files are automatically backed up before deletion (unless `--no-backup` is used when running the python file).
 
 **Syntax:**
 ```
