@@ -15,7 +15,7 @@ try:
 except ImportError:
     COLOR_SUPPORT = False
     class Fore:
-        GREEN = RED = YELLOW = CYAN = MAGENTA = ""
+        GREEN = RED = YELLOW = CYAN = MAGENTA = BLUE = ""
     class Style:
         RESET_ALL = BRIGHT = ""
 
@@ -44,6 +44,13 @@ def print_info(msg):
     """Print info message in cyan."""
     if COLOR_SUPPORT:
         print(f"{Fore.CYAN}{msg}{Style.RESET_ALL}")
+    else:
+        print(msg)
+
+def print_tree(msg):
+    """Print tree output in blue."""
+    if COLOR_SUPPORT:
+        print(f"{Fore.BLUE}{msg}{Style.RESET_ALL}")
     else:
         print(msg)
 
@@ -508,6 +515,72 @@ def read_file_to_clipboard(file_path, stats, line_num=0):
         print_error(f"ERROR: Could not read file '{file_path}'. Reason: {e}")
         stats.failed += 1
 
+def show_directory_tree(dir_path, params, stats, line_num=0):
+    """Displays directory tree structure."""
+    print_info(f"[Line {line_num}] TREE: Showing tree for '{dir_path}'...")
+    
+    if not os.path.exists(dir_path):
+        print_error(f"ERROR: Directory '{dir_path}' not found. Skipping.")
+        stats.failed += 1
+        return
+    
+    if not os.path.isdir(dir_path):
+        print_error(f"ERROR: '{dir_path}' is not a directory. Skipping.")
+        stats.failed += 1
+        return
+    
+    # Get parameters
+    max_depth = params.get('depth', None)
+    show_hidden = params.get('show_hidden', False)
+    include_files = params.get('include_files', True)
+    
+    if args.verbose:
+        print(f"  Parameters: depth={max_depth}, show_hidden={show_hidden}, include_files={include_files}")
+    
+    def get_tree_structure(path, prefix="", depth=0):
+        """Recursively build tree structure."""
+        if max_depth is not None and depth >= max_depth:
+            return []
+        
+        items = []
+        try:
+            entries = sorted(os.listdir(path))
+            if not show_hidden:
+                entries = [e for e in entries if not e.startswith('.')]
+            
+            for i, entry in enumerate(entries):
+                full_path = os.path.join(path, entry)
+                is_last = i == len(entries) - 1
+                current_prefix = "└── " if is_last else "├── "
+                items.append(prefix + current_prefix + entry)
+                
+                if os.path.isdir(full_path):
+                    extension = "    " if is_last else "│   "
+                    items.extend(get_tree_structure(full_path, prefix + extension, depth + 1))
+                elif not include_files:
+                    continue
+        except PermissionError:
+            items.append(prefix + "└── [Permission Denied]")
+        
+        return items
+    
+    tree_lines = [dir_path]
+    tree_lines.extend(get_tree_structure(dir_path))
+    
+    if args.dry_run:
+        print_warning("DRY RUN: Would display tree (no output shown)")
+        stats.skipped += 1
+        return
+    
+    print("\n" + "="*60)
+    print_tree("DIRECTORY TREE")
+    print("="*60)
+    for line in tree_lines:
+        print_tree(line)
+    print("="*60 + "\n")
+    
+    stats.modified += 1
+
 def rollback_backups(backup_dir=".kif_backups", session_name=None):
     """Restore all files from backups."""
     
@@ -634,7 +707,12 @@ def parse_kifdiff(file_path, stats=None):
                 print(f"\n[Line {i}] Target file: {current_file}")
             continue
 
-        if not current_file:
+        # Check if this line needs a file context
+        needs_file_context = any(stripped_line.startswith(d) for d in [
+            "@Kif CREATE", "@Kif DELETE", "@Kif SEARCH_AND_REPLACE"
+        ])
+        
+        if needs_file_context and not current_file:
             print_warning(f"WARNING: No file specified before an operation at line {i}. Skipping.")
             continue
 
@@ -662,8 +740,14 @@ def parse_kifdiff(file_path, stats=None):
             continue
             
         if stripped_line.startswith("@Kif READ"):
+            # Extract file path from READ directive
+            read_file_path = stripped_line.split(" ", 2)[2] if len(stripped_line.split(" ", 2)) > 2 else ""
+            if not read_file_path:
+                print_error(f"ERROR: No file path specified for READ directive at line {i}.")
+                stats.failed += 1
+                continue
             directive_line = i
-            read_file_to_clipboard(current_file, stats, directive_line)
+            read_file_to_clipboard(read_file_path, stats, directive_line)
             continue
 
         if stripped_line.startswith("@Kif SEARCH_AND_REPLACE"):
@@ -676,6 +760,23 @@ def parse_kifdiff(file_path, stats=None):
                 current_params = DirectiveParams(match.group(1))
             else:
                 current_params = DirectiveParams()
+            continue
+        
+        if stripped_line.startswith("@Kif TREE"):
+            # Extract directory path from TREE directive
+            tree_dir = stripped_line.split(" ", 2)[2] if len(stripped_line.split(" ", 2)) > 2 else ""
+            if not tree_dir:
+                print_error(f"ERROR: No directory specified for TREE directive at line {i}.")
+                stats.failed += 1
+                continue
+            # Extract parameters if present
+            match = re.search(r'@Kif TREE\((.*?)\)', stripped_line)
+            if match:
+                current_params = DirectiveParams(match.group(1))
+            else:
+                current_params = DirectiveParams()
+            directive_line = i
+            show_directory_tree(tree_dir, current_params, stats, directive_line)
             continue
         elif stripped_line == "@Kif END_SEARCH_AND_REPLACE":
             if mode == "SEARCH_AND_REPLACE":
@@ -727,15 +828,32 @@ Examples:
   %(prog)s --rollback-session session_XXX     # Restore specific session
   %(prog)s file1.kifdiff file2.kifdiff        # Apply multiple files
 
+Directives:
+  @Kif FILE <path>                            # Set target file for operations
+  @Kif CREATE                                 # Create a new file
+  @Kif DELETE                                 # Delete the target file
+  @Kif READ <path>                            # Read file content to clipboard
+  @Kif TREE <dir>                             # Show directory tree structure
+  @Kif SEARCH_AND_REPLACE                     # Replace content in file
+
 Directive Parameters:
   @Kif SEARCH_AND_REPLACE(replace_all=true, ignore_whitespace=false)
+  @Kif TREE(depth=3, show_hidden=false, include_files=true)
   
-  Available parameters:
+  Available parameters for SEARCH_AND_REPLACE:
     - replace_all: Replace all occurrences (default: false)
     - ignore_whitespace: Ignore trailing whitespace (default: false)
     - fuzzy_match: Use fuzzy matching (default: false)
+    - regex: Use regular expressions (default: false)
+    - count: Number of replacements (default: 1)
+  
+  Available parameters for TREE:
+    - depth: Maximum depth to display (default: unlimited)
+    - show_hidden: Show hidden files/directories (default: false)
+    - include_files: Show files in tree (default: true)
         """
     )
+
     
     # Positional arguments
     parser.add_argument("diff_file", nargs='*', 

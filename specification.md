@@ -112,17 +112,36 @@ Reads the contents of a file and copies them to the clipboard along with the fil
 
 **Syntax:**
 ```
-@Kif FILE <path/to/file_to_read.txt>
-@Kif READ
+@Kif READ <path/to/file_to_read.txt>
 ```
 
 **Example:**
 ```
-@Kif FILE lib/example.dart
-@Kif READ
+@Kif READ lib/example.dart
 ```
 
 **Note:** This requires the `pyperclip` module to be installed. If not available, the content will be printed to the console instead.
+
+---
+
+### 5. Directory Tree
+
+Displays a visual tree structure of a directory's contents.
+
+**Syntax:**
+```
+@Kif TREE <path/to/directory>
+```
+
+**Example:**
+```
+@Kif TREE lib/
+```
+
+**Example with Parameters:**
+```
+@Kif TREE lib/(depth=2, show_hidden=true)
+```
 
 ---
 
@@ -163,6 +182,20 @@ Directives can accept parameters to modify their behavior. Parameters are specif
 - When `false`, treats the BEFORE block as literal text
 - Useful for pattern matching and replacement
 
+#### TREE Parameters
+
+**`depth`** (integer, default: unlimited)
+- Maximum directory depth to display
+- Useful for limiting output in large directory structures
+
+**`show_hidden`** (boolean, default: `false`)
+- When `true`, includes hidden files and directories (those starting with `.`)
+- When `false`, hides files and directories starting with `.`
+
+**`include_files`** (boolean, default: `true`)
+- When `true`, includes files in the tree output
+- When `false`, shows only directories
+
 **Example with Parameters:**
 ```
 @Kif SEARCH_AND_REPLACE(replace_all=true, ignore_whitespace=true, regex=true)
@@ -187,6 +220,11 @@ new code
 @Kif END_SEARCH_AND_REPLACE
 ```
 
+**Example with TREE Parameters:**
+```
+@Kif TREE lib/(depth=3, show_hidden=false, include_files=true)
+```
+
 Instructions for LLM: 
 
 1. For repetition, you can set replace_all to true when using SEARCH_AND_REPLACE to replace all occurrences of the BEFORE block.
@@ -196,3 +234,5 @@ Instructions for LLM:
 3. ONLY WRITE WHAT IS NEEDED. THE KIFDIFF IS FOR THIS VERY REASON SO THAT YOU DONT HAVE TO WRITE FULL FILES. Make good use of regex where needed.
 
 4. Use absolute paths and NOT relative paths.
+
+5. READ and TREE directives do not require a preceding FILE directive.
