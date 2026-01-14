@@ -3,3 +3,6 @@
 
 # Ignore tmp
 tmp
+
+# Ignore __pycache__
+__pycache__/
