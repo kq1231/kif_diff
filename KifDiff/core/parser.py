@@ -56,6 +56,61 @@ def parse_kifdiff(file_path, stats=None, args=None):
     for i, line in enumerate(lines, 1):
         stripped_line = line.strip()
 
+        # If we are inside a content block, buffer everything until we hit an explicit terminator.
+        if mode:
+            # Check for specific terminators based on the current mode
+            is_terminator = False
+            
+            if mode == "CREATE" and stripped_line == "@Kif END_CREATE":
+                is_terminator = True
+            elif mode == "OVERWRITE_FILE" and stripped_line == "@Kif END_OVERWRITE_FILE":
+                is_terminator = True
+            elif mode == "SEARCH_AND_REPLACE" and stripped_line == "@Kif END_SEARCH_AND_REPLACE":
+                is_terminator = True
+            
+            if is_terminator:
+                # Finalize the block based on the mode
+                if mode == "CREATE":
+                    create_directive.execute(create_file_path, "".join(buffer), stats, directive_line, args)
+                elif mode == "OVERWRITE_FILE":
+                    overwrite_directive.execute(overwrite_file_path, "".join(buffer), stats, directive_line, args)
+                elif mode == "SEARCH_AND_REPLACE":
+                    full_text = "".join(buffer)
+                    try:
+                        before_marker = full_text.index("@Kif BEFORE") + len("@Kif BEFORE\n")
+                        end_before_marker = full_text.index("@Kif END_BEFORE")
+                        after_marker = full_text.index("@Kif AFTER") + len("@Kif AFTER\n")
+                        end_after_marker = full_text.index("@Kif END_AFTER")
+
+                        before_text = full_text[before_marker:end_before_marker]
+                        after_text = full_text[after_marker:end_after_marker]
+                        
+                        # Remove trailing newline if present for cleaner matching
+                        if before_text.endswith('\n'):
+                            before_text = before_text[:-1]
+                        if after_text.endswith('\n'):
+                            after_text = after_text[:-1]
+                        
+                        search_replace_directive.execute(current_file, before_text, after_text, current_params, stats, directive_line, args)
+                    except (ValueError, IndexError) as e:
+                        from ..utils.output import print_error
+                        print_error(f"ERROR: Malformed SEARCH_AND_REPLACE block for file '{current_file}' at line {directive_line}.")
+                        if args and args.verbose:
+                            print(f"  Details: {e}")
+                        stats.failed += 1
+                
+                # Reset state
+                mode = None
+                buffer = []
+                current_params = DirectiveParams()
+                continue
+            else:
+                # Inside a block, treat all lines as content
+                buffer.append(line)
+                continue
+
+        # --- Outside of content blocks (Global Scope) ---
+
         if stripped_line.startswith("@Kif FILE"):
             current_file = stripped_line.split(" ", 2)[2]
             file_directive.execute(current_file, stats, args)
@@ -105,11 +160,6 @@ def parse_kifdiff(file_path, stats=None, args=None):
                 mode = None
                 continue
             continue
-        elif stripped_line == "@Kif END_CREATE":
-            if mode == "CREATE":
-                create_directive.execute(create_file_path, "".join(buffer), stats, directive_line, args)
-                mode = None
-            continue
 
         # OVERWRITE_FILE directive
         if stripped_line.startswith("@Kif OVERWRITE_FILE"):
@@ -136,11 +186,6 @@ def parse_kifdiff(file_path, stats=None, args=None):
                 stats.failed += 1
                 mode = None
                 continue
-            continue
-        elif stripped_line == "@Kif END_OVERWRITE_FILE":
-            if mode == "OVERWRITE_FILE":
-                overwrite_directive.execute(overwrite_file_path, "".join(buffer), stats, directive_line, args)
-                mode = None
             continue
 
         if stripped_line.startswith("@Kif DELETE"):
@@ -208,37 +253,6 @@ def parse_kifdiff(file_path, stats=None, args=None):
             directive_line = i
             tree_directive.execute(tree_dir, current_params, stats, directive_line, args)
             continue
-        elif stripped_line == "@Kif END_SEARCH_AND_REPLACE":
-            if mode == "SEARCH_AND_REPLACE":
-                full_text = "".join(buffer)
-                try:
-                    before_marker = full_text.index("@Kif BEFORE") + len("@Kif BEFORE\n")
-                    end_before_marker = full_text.index("@Kif END_BEFORE")
-                    after_marker = full_text.index("@Kif AFTER") + len("@Kif AFTER\n")
-                    end_after_marker = full_text.index("@Kif END_AFTER")
-
-                    before_text = full_text[before_marker:end_before_marker]
-                    after_text = full_text[after_marker:end_after_marker]
-                    
-                    # Remove trailing newline if present for cleaner matching
-                    if before_text.endswith('\n'):
-                        before_text = before_text[:-1]
-                    if after_text.endswith('\n'):
-                        after_text = after_text[:-1]
-                    
-                    search_replace_directive.execute(current_file, before_text, after_text, current_params, stats, directive_line, args)
-                except (ValueError, IndexError) as e:
-                    from ..utils.output import print_error
-                    print_error(f"ERROR: Malformed SEARCH_AND_REPLACE block for file '{current_file}' at line {directive_line}.")
-                    if args and args.verbose:
-                        print(f"  Details: {e}")
-                    stats.failed += 1
-                mode = None
-            continue
-
-        # Buffer content
-        if mode:
-            buffer.append(line)
 
     print_info("\n--- KifDiff processing complete. ---")
 
