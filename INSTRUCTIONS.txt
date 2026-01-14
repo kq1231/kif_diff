@@ -1,21 +1,22 @@
 KifDiff Instructions for LLMs v2.0
 
-CRITICAL WORKFLOW: Two-Phase Process
+CRITICAL WORKFLOW: Context-Aware Execution
 
-KifDiff operates in TWO DISTINCT PHASES that must be executed separately:
+KifDiff can operate in TWO MODES depending on your knowledge of the codebase:
 
-Phase 1: INQUIRY (Information Gathering)
-Purpose: Gather information about the codebase before making changes
+DIRECT EXECUTION MODE (Preferred)
+When to use: You already have the file contents from conversation context
+Action: Create a .kifdiff file directly with CREATE, DELETE, OVERWRITE_FILE, MOVE, or SEARCH_AND_REPLACE operations
+Skip inquiry: No need to ask for file contents you already have
+
+INQUIRY MODE (Only When Needed)
+When to use: You DON'T have the file contents or directory structure you need
 Action: Create a .kifdiff file with ONLY @Kif READ and/or @Kif TREE directives
-Stop Here: Wait for the user to run this file and provide you with the results
+Wait: Get the inquiry results from the user before proceeding with execution
 
-Phase 2: EXECUTION (Making Changes)
-Purpose: Apply actual code modifications based on inquiry results
-Action: Create a .kifdiff file with CREATE, DELETE, or SEARCH_AND_REPLACE operations
-Timing: Only after receiving the inquiry results from the user
+GOLDEN RULE: Only inquire when you lack necessary information!
 
-NEVER COMBINE PHASES
-DO NOT write both inquiry and execution in the same response or file. You cannot make informed changes without first seeing the inquiry results!
+If the user has already shared file contents, shown you code, or you have the context you need from earlier in the conversation, skip straight to execution. Don't waste time asking for information you already have.
 
 ALWAYS USE CODE BLOCKS
 ALL KifDiff content must be wrapped in code blocks. This makes it easy for users to copy and save as .kifdiff files.
@@ -23,22 +24,18 @@ ALL KifDiff content must be wrapped in code blocks. This makes it easy for users
 Bad Example:
 Here's the inquiry file:
 @Kif READ lib/example.dart
-@Kif TREE lib/
-
-And here's the changes file:
-@Kif FILE lib/example.dart
-@Kif SEARCH_AND_REPLACE
-...
 
 Good Example:
-I need to examine the codebase first. Please run this inquiry file:
-
-(code block with kifdiff)
+```text
 @Kif READ lib/example.dart
-@Kif TREE lib/
-(end code block)
+```
 
-Once you provide the results, I'll create the execution file with the necessary changes.
+Or when you have the context:
+```text
+@Kif FILE /home/user/project/lib/example.dart
+@Kif SEARCH_AND_REPLACE
+...
+```
 
 
 Core Directives
@@ -49,21 +46,21 @@ Specifies the target file for subsequent operations.
 Important:
 - Use absolute paths, not relative paths
 - Required for: DELETE, SEARCH_AND_REPLACE
-- Not required for: CREATE, READ, TREE, MOVE (these directives specify their own file paths)
+- Not required for: CREATE, READ, TREE, MOVE, OVERWRITE_FILE (these directives specify their own file paths)
 
 Example:
 @Kif FILE /home/user/project/lib/widgets/ui_input.dart
 
 
-Phase 1: INQUIRY Operations
+INQUIRY Operations (Use Only When Needed)
 
 @Kif READ <absolute_path>
 Reads a file's contents and copies it to clipboard (or prints to console).
 
-Use when you need to:
-- Examine existing code before modifying it
-- Understand the current implementation
-- Check file structure or dependencies
+Use ONLY when you need to:
+- Examine code you haven't seen yet
+- Understand implementation details not provided in conversation
+- Check file structure or dependencies you're unaware of
 
 Example:
 @Kif READ /home/user/project/lib/example.dart
@@ -76,10 +73,10 @@ Parameters:
 - show_hidden=true/false - Include hidden files (default: false)
 - include_files=true/false - Show files or only directories (default: true)
 
-Use when you need to:
-- Understand project structure
-- Find related files
-- Locate where to create new files
+Use ONLY when you need to:
+- Understand project structure you don't know
+- Find related files in unfamiliar directories
+- Locate where to create new files when structure is unclear
 
 Examples:
 @Kif TREE /home/user/project/lib/
@@ -89,7 +86,7 @@ Examples:
 @Kif TREE /home/user/project/lib/widgets/(depth=1, include_files=false)
 
 
-Phase 2: EXECUTION Operations
+EXECUTION Operations
 
 1. Create File
 
@@ -283,26 +280,30 @@ const int timeout = 5000;
 
 Best Practices for LLMs
 
-1. Always Start with Inquiry
-Before making any changes, understand the codebase structure.
+1. Skip Inquiry When You Have Context
+If the user has already shared code, pasted file contents, or you have the information from earlier in the conversation, go straight to execution. Don't ask for information you already have.
 
-2. Write Minimal Changes
+2. Inquire Only When Necessary
+Before making changes, you need to understand the codebase. But ONLY use inquiry operations (@Kif READ, @Kif TREE) when:
+- You don't have the file contents
+- You don't know the directory structure
+- You need to see implementation details not provided
+
+3. Write Minimal Changes
 Use SEARCH_AND_REPLACE instead of rewriting entire files. Only include the specific code blocks that need modification.
 
 Exception: When the new content is drastically different from the original file, use OVERWRITE_FILE instead of multiple SEARCH_AND_REPLACE operations.
 
-Example scenario: If a file currently has 1000 lines but the new version only needs 10 lines, it's more efficient to use OVERWRITE_FILE rather than multiple SEARCH_AND_REPLACE operations to remove most of the content. Use your judgment: if you're replacing more than 80% of a file's content, OVERWRITE_FILE is usually better.
-
-3. Use Regex Wisely
+4. Use Regex Wisely
 When you need pattern matching, enable regex=true and remember to use replace_all=true if you want to replace all matches.
 
-4. Be Precise with BEFORE Blocks
+5. Be Precise with BEFORE Blocks
 The BEFORE block must match exactly. If unsure about whitespace, use ignore_whitespace=true.
 
-5. Use Absolute Paths
+6. Use Absolute Paths
 Never use relative paths. Always specify the full path from the project root.
 
-6. Multiple Files and Operations
+7. Multiple Files and Operations
 You can operate on multiple files and use different operations in a single .kifdiff file.
 
 Example:
@@ -322,25 +323,13 @@ Example:
 @Kif DELETE
 
 
-Common Workflow Example
+Common Workflow Examples
 
-User Request: "Add a new button to the home screen and update the theme colors"
+Scenario 1: User Provides File Contents
+User Request: "Here's my home_screen.dart file: [paste code]. Add a new button."
 
-Your Response - Phase 1:
-I'll help you add a button and update the theme. First, let me examine the relevant files:
-
-(code block with kifdiff)
-@Kif READ /home/user/project/lib/screens/home_screen.dart
-@Kif READ /home/user/project/lib/theme/app_theme.dart
-@Kif TREE /home/user/project/lib/widgets/
-(end code block)
-
-Please run this inquiry file and share the results.
-
-After User Provides Results - Phase 2:
-Based on the files you shared, here's the execution file:
-
-(code block with kifdiff)
+Your Response (Direct Execution):
+```text
 @Kif FILE /home/user/project/lib/screens/home_screen.dart
 @Kif SEARCH_AND_REPLACE
 @Kif BEFORE
@@ -362,34 +351,37 @@ Based on the files you shared, here's the execution file:
       ),
 @Kif END_AFTER
 @Kif END_SEARCH_AND_REPLACE
+```
 
-@Kif FILE /home/user/project/lib/theme/app_theme.dart
-@Kif SEARCH_AND_REPLACE(replace_all=true)
-@Kif BEFORE
-primaryColor: Colors.blue
-@Kif END_BEFORE
-@Kif AFTER
-primaryColor: Color(0xFF6200EE)
-@Kif END_AFTER
-@Kif END_SEARCH_AND_REPLACE
-(end code block)
+Scenario 2: Unknown Codebase
+User Request: "Add a new button to the home screen"
+
+Your Response (Inquiry First):
+I need to see the current home screen implementation. Please run this inquiry:
+```text
+@Kif READ /home/user/project/lib/screens/home_screen.dart
+@Kif TREE /home/user/project/lib/widgets/
+```
+
+Once you provide the results, I'll create the changes.
+
+[After receiving results, then provide execution file]
 
 
 Remember
 
 DO:
-- Always inquiry first, execute second
-- Wait for inquiry results before writing execution
+- Skip inquiry if you have the necessary context
 - Always wrap KifDiff content in code blocks
 - Use absolute paths
 - Write minimal, targeted changes
 - Use regex when patterns are needed
 
 DO NOT:
-- Combine inquiry and execution in one response
-- Make changes without examining the code first
+- Request file contents you already have from conversation
+- Make changes without understanding the code (either from context or inquiry)
 - Use relative paths
 - Rewrite entire files when small changes suffice
 - Forget replace_all=true when using regex to replace all matches
 
-The golden rule: If you haven't seen the inquiry results, you cannot write the execution file!
+The golden rule: Only inquire when you lack necessary information. If you have all the necessary context, feel free to execute directly.
