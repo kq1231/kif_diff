@@ -1,19 +1,395 @@
 """KifDiff file parsing and execution."""
 
 import os
-import re
 from datetime import datetime
+from typing import List, Optional, Dict, Any
 from .stats import Stats
-from .directives import (
-    FileDirective, CreateDirective, DeleteDirective, MoveDirective,
-    ReadDirective, TreeDirective, SearchReplaceDirective, DirectiveParams
+from .lexer import Lexer, Token, TokenType
+from .ast_nodes import (
+    Program, Directive, CreateDirective, DeleteDirective, MoveDirective,
+    ReadDirective, TreeDirective, OverwriteFileDirective, 
+    SearchAndReplaceDirective, FindDirective, BeforeAfterBlock
 )
-from .directives.overwrite import OverwriteDirective
-from utils.output import print_info
+from .executor import ASTExecutor
+from utils.output import RICH_SUPPORT, print_info, print_error, print_header, print_clipboard_summary, print_ast_tree
+
+
+class Parser:
+    """Parses tokens into an Abstract Syntax Tree."""
+    
+    def __init__(self, tokens: List[Token]):
+        self.tokens = tokens
+        self.pos = 0
+    
+    def error(self, msg: str, token: Optional[Token] = None):
+        """Raise a parser error."""
+        if token is None:
+            token = self.current_token()
+        raise SyntaxError(f"Parser error at line {token.line}, column {token.column}: {msg}")
+    
+    def current_token(self) -> Token:
+        """Get current token."""
+        if self.pos < len(self.tokens):
+            return self.tokens[self.pos]
+        return self.tokens[-1]  # Return EOF
+    
+    def peek(self, offset: int = 0) -> Token:
+        """Peek at token at current position + offset."""
+        pos = self.pos + offset
+        if pos < len(self.tokens):
+            return self.tokens[pos]
+        return self.tokens[-1]  # Return EOF
+    
+    def advance(self) -> Token:
+        """Advance to next token and return current."""
+        token = self.current_token()
+        if self.pos < len(self.tokens) - 1:
+            self.pos += 1
+        return token
+    
+    def expect(self, token_type: TokenType) -> Token:
+        """Expect a specific token type and advance."""
+        token = self.current_token()
+        if token.type != token_type:
+            self.error(f"Expected {token_type.name}, got {token.type.name}", token)
+        return self.advance()
+    
+    def skip_newlines(self):
+        """Skip any newline tokens."""
+        while self.current_token().type == TokenType.NEWLINE:
+            self.advance()
+    
+    def parse_parameters(self) -> Dict[str, Any]:
+        """Parse parameter list: (key=value, key2=value2)."""
+        params = {}
+        
+        self.expect(TokenType.LPAREN)
+        
+        while self.current_token().type != TokenType.RPAREN:
+            # Parse key
+            key_token = self.expect(TokenType.IDENTIFIER)
+            key = key_token.value
+            
+            # Parse =
+            self.expect(TokenType.EQUALS)
+            
+            # Parse value
+            value_token = self.current_token()
+            if value_token.type == TokenType.STRING:
+                value = self.advance().value
+            elif value_token.type == TokenType.NUMBER:
+                value = int(self.advance().value)
+            elif value_token.type == TokenType.IDENTIFIER:
+                # Handle true/false/other identifiers
+                val_str = self.advance().value.lower()
+                if val_str == 'true':
+                    value = True
+                elif val_str == 'false':
+                    value = False
+                else:
+                    value = val_str
+            else:
+                self.error(f"Expected parameter value, got {value_token.type.name}", value_token)
+            
+            params[key] = value
+            
+            # Check for comma
+            if self.current_token().type == TokenType.COMMA:
+                self.advance()
+        
+        self.expect(TokenType.RPAREN)
+        
+        return params
+    
+    def parse_path(self) -> str:
+        """Parse a path argument."""
+        token = self.current_token()
+        if token.type == TokenType.PATH:
+            return self.advance().value
+        self.error(f"Expected path, got {token.type.name}", token)
+    
+    def parse_content_until(self, end_token_type: TokenType) -> str:
+        """Parse content until we hit a specific end marker."""
+        content_parts = []
+        
+        self.skip_newlines()
+        
+        while self.current_token().type != end_token_type and self.current_token().type != TokenType.EOF:
+            token = self.current_token()
+            
+            if token.type == TokenType.CONTENT:
+                content_parts.append(self.advance().value)
+            elif token.type == TokenType.NEWLINE:
+                self.advance()
+            elif token.type == TokenType.DIRECTIVE_START:
+                # Check if next token is the end marker
+                next_tok = self.peek(1)
+                if next_tok.type == end_token_type:
+                    break
+                else:
+                    self.error(f"Unexpected directive in content block", token)
+            else:
+                self.error(f"Unexpected token in content: {token.type.name}", token)
+        
+        return ''.join(content_parts)
+    
+    def parse_before_after_block(self) -> BeforeAfterBlock:
+        """Parse a BEFORE/AFTER block pair."""
+        # Expect @Kif BEFORE
+        self.expect(TokenType.DIRECTIVE_START)
+        self.expect(TokenType.BEFORE)
+        self.skip_newlines()
+        
+        # Parse BEFORE content
+        before_content = self.parse_content_until(TokenType.END_BEFORE)
+        
+        # Expect @Kif END_BEFORE
+        self.expect(TokenType.DIRECTIVE_START)
+        self.expect(TokenType.END_BEFORE)
+        self.skip_newlines()
+        
+        # Expect @Kif AFTER
+        self.expect(TokenType.DIRECTIVE_START)
+        self.expect(TokenType.AFTER)
+        self.skip_newlines()
+        
+        # Parse AFTER content
+        after_content = self.parse_content_until(TokenType.END_AFTER)
+        
+        # Expect @Kif END_AFTER
+        self.expect(TokenType.DIRECTIVE_START)
+        self.expect(TokenType.END_AFTER)
+        self.skip_newlines()
+        
+        # Remove trailing newline if present for cleaner matching
+        if before_content.endswith('\n'):
+            before_content = before_content[:-1]
+        if after_content.endswith('\n'):
+            after_content = after_content[:-1]
+        
+        return BeforeAfterBlock(before=before_content, after=after_content)
+    
+    def parse_create_directive(self, line: int, column: int) -> CreateDirective:
+        """Parse CREATE directive."""
+        params = {}
+        
+        # Check for parameters
+        if self.current_token().type == TokenType.LPAREN:
+            params = self.parse_parameters()
+        
+        # Parse path
+        path = self.parse_path()
+        self.skip_newlines()
+        
+        # Parse content until END_CREATE
+        content = self.parse_content_until(TokenType.END_CREATE)
+        
+        # Expect @Kif END_CREATE
+        self.expect(TokenType.DIRECTIVE_START)
+        self.expect(TokenType.END_CREATE)
+        self.skip_newlines()
+        
+        return CreateDirective(line=line, column=column, params=params, path=path, content=content)
+    
+    def parse_delete_directive(self, line: int, column: int) -> DeleteDirective:
+        """Parse DELETE directive."""
+        params = {}
+        
+        # Check for parameters
+        if self.current_token().type == TokenType.LPAREN:
+            params = self.parse_parameters()
+        
+        # Parse path
+        path = self.parse_path()
+        self.skip_newlines()
+        
+        return DeleteDirective(line=line, column=column, params=params, path=path)
+    
+    def parse_move_directive(self, line: int, column: int) -> MoveDirective:
+        """Parse MOVE directive."""
+        params = {}
+        
+        # Check for parameters
+        if self.current_token().type == TokenType.LPAREN:
+            params = self.parse_parameters()
+        
+        # Parse paths (source and dest separated by space)
+        path_token = self.current_token()
+        if path_token.type != TokenType.PATH:
+            self.error("Expected source and destination paths for MOVE", path_token)
+        
+        paths = self.advance().value
+        parts = paths.split(None, 1)  # Split on first whitespace
+        
+        if len(parts) < 2:
+            self.error("MOVE requires both source and destination paths", path_token)
+        
+        source = parts[0]
+        dest = parts[1]
+        
+        self.skip_newlines()
+        
+        return MoveDirective(line=line, column=column, params=params, source=source, dest=dest)
+    
+    def parse_read_directive(self, line: int, column: int) -> ReadDirective:
+        """Parse READ directive."""
+        params = {}
+        
+        # Check for parameters
+        if self.current_token().type == TokenType.LPAREN:
+            params = self.parse_parameters()
+        
+        # Parse path
+        path = self.parse_path()
+        self.skip_newlines()
+        
+        return ReadDirective(line=line, column=column, params=params, path=path)
+    
+    def parse_tree_directive(self, line: int, column: int) -> TreeDirective:
+        """Parse TREE directive."""
+        params = {}
+        
+        # Check for parameters
+        if self.current_token().type == TokenType.LPAREN:
+            params = self.parse_parameters()
+        
+        # Parse path
+        path = self.parse_path()
+        self.skip_newlines()
+        
+        return TreeDirective(line=line, column=column, params=params, path=path)
+    
+    def parse_overwrite_file_directive(self, line: int, column: int) -> OverwriteFileDirective:
+        """Parse OVERWRITE_FILE directive."""
+        params = {}
+        
+        # Check for parameters
+        if self.current_token().type == TokenType.LPAREN:
+            params = self.parse_parameters()
+        
+        # Parse path
+        path = self.parse_path()
+        self.skip_newlines()
+        
+        # Parse content until END_OVERWRITE_FILE
+        content = self.parse_content_until(TokenType.END_OVERWRITE_FILE)
+        
+        # Expect @Kif END_OVERWRITE_FILE
+        self.expect(TokenType.DIRECTIVE_START)
+        self.expect(TokenType.END_OVERWRITE_FILE)
+        self.skip_newlines()
+        
+        return OverwriteFileDirective(line=line, column=column, params=params, path=path, content=content)
+    
+    def parse_search_and_replace_directive(self, line: int, column: int) -> SearchAndReplaceDirective:
+        """Parse SEARCH_AND_REPLACE directive with multiple BEFORE/AFTER blocks."""
+        params = {}
+        
+        # Check for parameters
+        if self.current_token().type == TokenType.LPAREN:
+            params = self.parse_parameters()
+        
+        # Parse path
+        path = self.parse_path()
+        self.skip_newlines()
+        
+        # Parse multiple BEFORE/AFTER blocks
+        blocks = []
+        
+        while True:
+            token = self.current_token()
+            
+            # Check if we're at the end of SEARCH_AND_REPLACE
+            if token.type == TokenType.DIRECTIVE_START:
+                next_tok = self.peek(1)
+                if next_tok.type == TokenType.END_SEARCH_AND_REPLACE:
+                    break
+                elif next_tok.type == TokenType.BEFORE:
+                    # Parse another BEFORE/AFTER block
+                    block = self.parse_before_after_block()
+                    blocks.append(block)
+                else:
+                    self.error(f"Expected BEFORE or END_SEARCH_AND_REPLACE, got {next_tok.type.name}", next_tok)
+            elif token.type == TokenType.EOF:
+                self.error("Unexpected EOF in SEARCH_AND_REPLACE block", token)
+            else:
+                self.advance()
+        
+        # Expect @Kif END_SEARCH_AND_REPLACE
+        self.expect(TokenType.DIRECTIVE_START)
+        self.expect(TokenType.END_SEARCH_AND_REPLACE)
+        self.skip_newlines()
+        
+        return SearchAndReplaceDirective(line=line, column=column, params=params, path=path, blocks=blocks)
+    
+    def parse_find_directive(self, line: int, column: int) -> FindDirective:
+        """Parse FIND directive."""
+        params = {}
+        
+        # Check for parameters
+        if self.current_token().type == TokenType.LPAREN:
+            params = self.parse_parameters()
+        
+        # Parse path
+        path = self.parse_path()
+        self.skip_newlines()
+        
+        return FindDirective(line=line, column=column, params=params, path=path)
+    
+    def parse_directive(self) -> Optional[Directive]:
+        """Parse a single directive."""
+        # Expect @Kif
+        token = self.current_token()
+        if token.type == TokenType.EOF:
+            return None
+        
+        if token.type != TokenType.DIRECTIVE_START:
+            self.error(f"Expected @Kif directive, got {token.type.name}", token)
+        
+        directive_start = self.advance()
+        line = directive_start.line
+        column = directive_start.column
+        
+        # Get directive type
+        directive_token = self.current_token()
+        self.advance()
+        
+        # Parse specific directive
+        if directive_token.type == TokenType.CREATE:
+            return self.parse_create_directive(line, column)
+        elif directive_token.type == TokenType.DELETE:
+            return self.parse_delete_directive(line, column)
+        elif directive_token.type == TokenType.MOVE:
+            return self.parse_move_directive(line, column)
+        elif directive_token.type == TokenType.READ:
+            return self.parse_read_directive(line, column)
+        elif directive_token.type == TokenType.TREE:
+            return self.parse_tree_directive(line, column)
+        elif directive_token.type == TokenType.OVERWRITE_FILE:
+            return self.parse_overwrite_file_directive(line, column)
+        elif directive_token.type == TokenType.SEARCH_AND_REPLACE:
+            return self.parse_search_and_replace_directive(line, column)
+        elif directive_token.type == TokenType.FIND:
+            return self.parse_find_directive(line, column)
+        else:
+            self.error(f"Unknown directive: {directive_token.value}", directive_token)
+    
+    def parse(self) -> Program:
+        """Parse tokens into an AST."""
+        program = Program()
+        
+        self.skip_newlines()
+        
+        while self.current_token().type != TokenType.EOF:
+            directive = self.parse_directive()
+            if directive:
+                program.directives.append(directive)
+        
+        return program
 
 
 def parse_kifdiff(file_path, stats=None, args=None):
-    """Parses and executes a .kifdiff file."""
+    """Parses and executes a .kifdiff file using the new lexer/parser/AST pipeline."""
     if stats is None:
         stats = Stats()
     
@@ -22,239 +398,59 @@ def parse_kifdiff(file_path, stats=None, args=None):
     session_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     session_backup_dir = os.path.join(args.backup_dir, f"session_{session_timestamp}")
     
-    print_info(f"--- Processing KifDiff file: {file_path} ---")
-    if args and not args.no_backup:
-        print_info(f"Backup session: {session_backup_dir}")
+    backup_dir = session_backup_dir if args and not args.no_backup else None
+    print_header(file_path, backup_dir)
     
     try:
         with open(file_path, 'r') as f:
-            lines = f.readlines()
+            content = f.read()
     except FileNotFoundError:
-        from ..utils.output import print_error
         print_error(f"FATAL ERROR: KifDiff file '{file_path}' not found.")
         stats.failed += 1
         return stats
 
-    # Initialize directive handlers
-    file_directive = FileDirective()
-    create_directive = CreateDirective()
-    overwrite_directive = OverwriteDirective()
-    delete_directive = DeleteDirective()
-    move_directive = MoveDirective()
-    read_directive = ReadDirective()
-    tree_directive = TreeDirective()
-    search_replace_directive = SearchReplaceDirective()
-
-    current_file = None
-    create_file_path = None
-    overwrite_file_path = None
-    mode = None
-    buffer = []
-    current_params = DirectiveParams()
-    directive_line = 0
-
-    for i, line in enumerate(lines, 1):
-        stripped_line = line.strip()
-
-        # If we are inside a content block, buffer everything until we hit an explicit terminator.
-        if mode:
-            # Check for specific terminators based on the current mode
-            is_terminator = False
-            
-            if mode == "CREATE" and stripped_line == "@Kif END_CREATE":
-                is_terminator = True
-            elif mode == "OVERWRITE_FILE" and stripped_line == "@Kif END_OVERWRITE_FILE":
-                is_terminator = True
-            elif mode == "SEARCH_AND_REPLACE" and stripped_line == "@Kif END_SEARCH_AND_REPLACE":
-                is_terminator = True
-            
-            if is_terminator:
-                # Finalize the block based on the mode
-                if mode == "CREATE":
-                    create_directive.execute(create_file_path, "".join(buffer), stats, directive_line, args)
-                elif mode == "OVERWRITE_FILE":
-                    overwrite_directive.execute(overwrite_file_path, "".join(buffer), stats, directive_line, args)
-                elif mode == "SEARCH_AND_REPLACE":
-                    full_text = "".join(buffer)
-                    try:
-                        before_marker = full_text.index("@Kif BEFORE") + len("@Kif BEFORE\n")
-                        end_before_marker = full_text.index("@Kif END_BEFORE")
-                        after_marker = full_text.index("@Kif AFTER") + len("@Kif AFTER\n")
-                        end_after_marker = full_text.index("@Kif END_AFTER")
-
-                        before_text = full_text[before_marker:end_before_marker]
-                        after_text = full_text[after_marker:end_after_marker]
-                        
-                        # Remove trailing newline if present for cleaner matching
-                        if before_text.endswith('\n'):
-                            before_text = before_text[:-1]
-                        if after_text.endswith('\n'):
-                            after_text = after_text[:-1]
-                        
-                        search_replace_directive.execute(current_file, before_text, after_text, current_params, stats, directive_line, args)
-                    except (ValueError, IndexError) as e:
-                        from ..utils.output import print_error
-                        print_error(f"ERROR: Malformed SEARCH_AND_REPLACE block for file '{current_file}' at line {directive_line}.")
-                        if args and args.verbose:
-                            print(f"  Details: {e}")
-                        stats.failed += 1
-                
-                # Reset state
-                mode = None
-                buffer = []
-                current_params = DirectiveParams()
-                continue
-            else:
-                # Inside a block, treat all lines as content
-                buffer.append(line)
-                continue
-
-        # --- Outside of content blocks (Global Scope) ---
-
-        if stripped_line.startswith("@Kif FILE"):
-            current_file = stripped_line.split(" ", 2)[2]
-            file_directive.execute(current_file, stats, args)
-            continue
-
-        # Check if this line needs a file context (CREATE can specify its own file)
-        needs_file_context = any(stripped_line.startswith(d) for d in [
-            "@Kif DELETE", "@Kif SEARCH_AND_REPLACE"
-        ])
-
-        if needs_file_context and not current_file:
-            from utils.output import print_warning
-            print_warning(f"WARNING: No file specified before an operation at line {i}. Skipping.")
-            continue
-
-        # Mode Switches with parameters
-        if stripped_line.startswith("@Kif CREATE"):
-            mode = "CREATE"
-            buffer = []
-            directive_line = i
-
-            # Extract file path from CREATE directive
-            # Format: @Kif CREATE <file_path> or @Kif CREATE(<params>) <file_path>
-            parts = stripped_line.split(" ", 2)
-            if len(parts) >= 3:
-                # File path specified in CREATE directive
-                create_file_path = parts[2].strip()
-                # Check if there are parameters
-                param_match = re.search(r'@Kif CREATE\((.*?)\)\s+(.+)', stripped_line)
-                if param_match:
-                    current_params = DirectiveParams(param_match.group(1))
-                    create_file_path = param_match.group(2).strip()
-                else:
-                    current_params = DirectiveParams()
-            else:
-                # No file path in CREATE directive - this is an error
-                from utils.output import print_error
-                print_error(f"ERROR: No file path specified for CREATE at line {i}. Use: @Kif CREATE <file_path>")
-                stats.failed += 1
-                mode = None
-                continue
-
-            if not create_file_path:
-                from utils.output import print_error
-                print_error(f"ERROR: No file path specified for CREATE at line {i}. Use: @Kif CREATE <file_path>")
-                stats.failed += 1
-                mode = None
-                continue
-            continue
-
-        # OVERWRITE_FILE directive
-        if stripped_line.startswith("@Kif OVERWRITE_FILE"):
-            mode = "OVERWRITE_FILE"
-            buffer = []
-            directive_line = i
-
-            # Extract file path from OVERWRITE_FILE directive
-            # Format: @Kif OVERWRITE_FILE <file_path>
-            parts = stripped_line.split(" ", 2)
-            if len(parts) >= 3:
-                overwrite_file_path = parts[2].strip()
-            else:
-                # No file path in OVERWRITE_FILE directive - this is an error
-                from utils.output import print_error
-                print_error(f"ERROR: No file path specified for OVERWRITE_FILE at line {i}. Use: @Kif OVERWRITE_FILE <file_path>")
-                stats.failed += 1
-                mode = None
-                continue
-
-            if not overwrite_file_path:
-                from utils.output import print_error
-                print_error(f"ERROR: No file path specified for OVERWRITE_FILE at line {i}. Use: @Kif OVERWRITE_FILE <file_path>")
-                stats.failed += 1
-                mode = None
-                continue
-            continue
-
-        if stripped_line.startswith("@Kif DELETE"):
-            directive_line = i
-            delete_directive.execute(current_file, stats, directive_line, args)
-            continue
-
-        if stripped_line.startswith("@Kif MOVE"):
-            # Extract source and destination paths
-            parts = stripped_line.split(" ", 2)
-            if len(parts) < 3:
-                from utils.output import print_error
-                print_error(f"ERROR: Invalid MOVE directive format at line {i}. Expected: @Kif MOVE <source> <dest>")
-                stats.failed += 1
-                continue
-            source_dest = parts[2]
-            if " " not in source_dest:
-                from utils.output import print_error
-                print_error(f"ERROR: MOVE directive requires both source and destination at line {i}")
-                stats.failed += 1
-                continue
-            source_path, dest_path = source_dest.split(" ", 1)
-            directive_line = i
-            move_directive.execute(source_path, dest_path, stats, directive_line, args)
-            continue
-            
-        if stripped_line.startswith("@Kif READ"):
-            # Extract file path from READ directive
-            read_file_path = stripped_line.split(" ", 2)[2] if len(stripped_line.split(" ", 2)) > 2 else ""
-            if not read_file_path:
-                from utils.output import print_error
-                print_error(f"ERROR: No file path specified for READ directive at line {i}.")
-                stats.failed += 1
-                continue
-            directive_line = i
-            read_directive.execute(read_file_path, stats, directive_line, args)
-            continue
-
-        if stripped_line.startswith("@Kif SEARCH_AND_REPLACE"):
-            mode = "SEARCH_AND_REPLACE"
-            buffer = []
-            directive_line = i
-            # Extract parameters if present
-            match = re.search(r'@Kif SEARCH_AND_REPLACE\((.*?)\)', stripped_line)
-            if match:
-                current_params = DirectiveParams(match.group(1))
-            else:
-                current_params = DirectiveParams()
-            continue
+    try:
+        # Tokenize
+        if args and args.verbose:
+            print_info("Tokenizing...")
+        lexer = Lexer(content)
+        tokens = lexer.tokenize()
         
-        if stripped_line.startswith("@Kif TREE"):
-            # Extract directory path from TREE directive
-            tree_dir = stripped_line.split(" ", 2)[2] if len(stripped_line.split(" ", 2)) > 2 else ""
-            if not tree_dir:
-                from utils.output import print_error
-                print_error(f"ERROR: No directory specified for TREE directive at line {i}.")
-                stats.failed += 1
-                continue
-            # Extract parameters if present
-            match = re.search(r'@Kif TREE\((.*?)\)', stripped_line)
-            if match:
-                current_params = DirectiveParams(match.group(1))
-            else:
-                current_params = DirectiveParams()
-            directive_line = i
-            tree_directive.execute(tree_dir, current_params, stats, directive_line, args)
-            continue
-
-    print_info("\n--- KifDiff processing complete. ---")
+        if args and args.verbose:
+            print_info(f"Generated {len(tokens)} tokens")
+        
+        # Parse to AST
+        if args and args.verbose:
+            print_info("Parsing to AST...")
+        parser = Parser(tokens)
+        program = parser.parse()
+        
+        if args and args.verbose:
+            print_info(f"Parsed {len(program.directives)} directive(s)")
+            if RICH_SUPPORT:
+                # Show beautiful AST tree - SubhanAllah!
+                print_ast_tree(program)
+        
+        # Execute AST
+        if args and args.verbose:
+            print_info("Executing directives...")
+        executor = ASTExecutor(stats, args)
+        executor.execute(program)
+        
+    except SyntaxError as e:
+        print_error(f"SYNTAX ERROR: {e}")
+        if args and args.verbose:
+            import traceback
+            traceback.print_exc()
+        stats.failed += 1
+        return stats
+    except Exception as e:
+        print_error(f"ERROR: {e}")
+        if args and args.verbose:
+            import traceback
+            traceback.print_exc()
+            stats.failed += 1
+        return stats
 
     # Copy accumulated clipboard buffer to clipboard
     if stats.clipboard_buffer:
@@ -262,18 +458,8 @@ def parse_kifdiff(file_path, stats=None, args=None):
             import pyperclip
             combined_content = ''.join(stats.clipboard_buffer)
             pyperclip.copy(combined_content)
-
-            total_items = len(stats.clipboard_files) + len(stats.clipboard_dirs) + len(stats.clipboard_errors)
-            from utils.output import print_success, print_warning
-            print_success(f"\nClipboard: Copied {total_items} item(s) to clipboard:")
-            if stats.clipboard_files:
-                print(f"  - {len(stats.clipboard_files)} file(s) read")
-            if stats.clipboard_dirs:
-                print(f"  - {len(stats.clipboard_dirs)} directory tree(s)")
-            if stats.clipboard_errors:
-                print_warning(f"  - {len(stats.clipboard_errors)} error(s)")
+            print_clipboard_summary(stats)
         except ImportError:
-            from utils.output import print_error
             print_error("\nERROR: pyperclip module not installed. Install it with 'pip install pyperclip'")
             print("Content that would have been copied to clipboard:")
             print("="*60)

@@ -1,4 +1,37 @@
-KifDiff Instructions for LLMs v2.0
+KifDiff Instructions for LLMs v3.0
+
+IMPORTANT NOTES:
+
+1. **Comments are supported!** Use # for single-line comments.
+   Lines starting with # (outside of content blocks) are ignored by the parser.
+
+   Example:
+   ```text
+   # This is a comment
+   @Kif READ /path/to/file.txt
+   # Another comment
+   @Kif TREE /path/to/dir
+   ```
+
+2. **Directives as content are preserved!**
+   When inside BEFORE/AFTER blocks (or CREATE/OVERWRITE_FILE content),
+   @Kif directives are treated as literal content, not as directives.
+   
+   This allows you to use KifDiff on KifDiff files themselves!
+   
+   Example:
+   ```text
+   @Kif SEARCH_AND_REPLACE /path/to/file.kifdiff
+   @Kif BEFORE
+   @Kif READ /old/path.txt
+   @Kif END_BEFORE
+   @Kif AFTER
+   @Kif READ /new/path.txt
+   @Kif END_AFTER
+   @Kif END_SEARCH_AND_REPLACE
+   ```
+   
+   The @Kif READ directives inside BEFORE/AFTER are treated as content, not directives.
 
 CRITICAL WORKFLOW: Context-Aware Execution
 
@@ -11,7 +44,7 @@ Skip inquiry: No need to ask for file contents you already have
 
 INQUIRY MODE (Only When Needed)
 When to use: You DON'T have the file contents or directory structure you need
-Action: Create a .kifdiff file with ONLY @Kif READ and/or @Kif TREE directives
+Action: Create a .kifdiff file with ONLY @Kif READ, @Kif TREE, or @Kif FIND directives
 Wait: Get the inquiry results from the user before proceeding with execution
 
 GOLDEN RULE: Only inquire when you lack necessary information!
@@ -32,24 +65,35 @@ Good Example:
 
 Or when you have the context:
 ```text
-@Kif FILE /home/user/project/lib/example.dart
-@Kif SEARCH_AND_REPLACE
+@Kif SEARCH_AND_REPLACE /home/user/project/lib/example.dart
+@Kif BEFORE
 ...
+@Kif END_BEFORE
+@Kif AFTER
+...
+@Kif END_AFTER
+@Kif END_SEARCH_AND_REPLACE
 ```
+
+
+=== NEW SYNTAX STRUCTURE ===
+
+All directives now follow this uniform structure:
+
+@Kif <DIRECTIVE_NAME>(<optional_keyword_args>) <required_non_keyword_args>
+
+Examples:
+- @Kif CREATE /path/to/file.txt
+- @Kif CREATE(backup=false) /path/to/file.txt
+- @Kif TREE(depth=2, show_hidden=false) /path/to/directory
+- @Kif SEARCH_AND_REPLACE(replace_all=true) /path/to/file.txt
+- @Kif FIND(match_pattern=".*\.py$", exclude="__pycache__") /path/to/search
 
 
 Core Directives
 
-@Kif FILE <absolute_path>
-Specifies the target file for subsequent operations.
-
-Important:
-- Use absolute paths, not relative paths
-- Required for: DELETE, SEARCH_AND_REPLACE
-- Not required for: CREATE, READ, TREE, MOVE, OVERWRITE_FILE (these directives specify their own file paths)
-
-Example:
-@Kif FILE /home/user/project/lib/widgets/ui_input.dart
+IMPORTANT CHANGE: The @Kif FILE directive has been REMOVED. 
+All directives now take file paths directly as required arguments.
 
 
 INQUIRY Operations (Use Only When Needed)
@@ -65,7 +109,8 @@ Use ONLY when you need to:
 Example:
 @Kif READ /home/user/project/lib/example.dart
 
-@Kif TREE <absolute_path>(parameters)
+
+@Kif TREE(<parameters>) <absolute_path>
 Displays directory structure as a visual tree.
 
 Parameters:
@@ -81,9 +126,34 @@ Use ONLY when you need to:
 Examples:
 @Kif TREE /home/user/project/lib/
 
-@Kif TREE /home/user/project/(depth=2, show_hidden=false)
+@Kif TREE(depth=2, show_hidden=false) /home/user/project/
 
-@Kif TREE /home/user/project/lib/widgets/(depth=1, include_files=false)
+@Kif TREE(depth=1, include_files=false) /home/user/project/lib/widgets/
+
+
+@Kif FIND(<parameters>) <absolute_path>
+Finds files in a directory matching regex patterns.
+
+Parameters:
+- match_pattern="regex" - Regex pattern for files to match (default: ".*")
+- include="regex" - Regex pattern for files to include (optional)
+- exclude="regex" - Regex pattern for files to exclude (optional)
+- depth=N - Maximum directory depth (default: unlimited)
+
+Use ONLY when you need to:
+- Find files by name pattern across directories
+- Locate specific file types (e.g., all .py files)
+- Search with complex include/exclude criteria
+
+Examples:
+Find all Python files:
+@Kif FIND(match_pattern=".*\.py$") /home/user/project/
+
+Find TypeScript files, excluding tests:
+@Kif FIND(match_pattern=".*\.ts$", exclude=".*\.test\.ts$") /home/user/project/src/
+
+Find all files with "config" in name, max depth 2:
+@Kif FIND(match_pattern=".*config.*", depth=2) /home/user/project/
 
 
 EXECUTION Operations
@@ -99,7 +169,6 @@ Syntax:
 
 Important:
 - Use absolute paths directly in the CREATE directive
-- Does NOT require @Kif FILE directive
 - Creates parent directories automatically if they don't exist
 - Overwrites the file if it already exists (automatically backed up)
 
@@ -123,7 +192,6 @@ Syntax:
 
 Important:
 - Use absolute paths directly in the OVERWRITE_FILE directive
-- Does NOT require @Kif FILE directive
 - Automatically backs up the existing file before overwriting
 - Creates the file if it doesn't exist
 - More efficient than DELETE + CREATE when replacing most of a file's content
@@ -146,12 +214,10 @@ class Config {
 Deletes a file (automatically backed up).
 
 Syntax:
-@Kif FILE <absolute_path>
-@Kif DELETE
+@Kif DELETE <absolute_path>
 
 Example:
-@Kif FILE /home/user/project/lib/old_utils.dart
-@Kif DELETE
+@Kif DELETE /home/user/project/lib/old_utils.dart
 
 
 4. Move/Rename File or Directory
@@ -163,7 +229,6 @@ Syntax:
 
 Important:
 - Use absolute paths for both source and destination
-- Does NOT require @Kif FILE directive
 - Works for both files and directories
 - Automatically creates destination directories if they don't exist
 - Source file/directory is backed up before moving
@@ -191,15 +256,21 @@ Move entire directory:
 5. Search and Replace
 
 Finds and replaces text blocks. Most powerful operation.
+NOW SUPPORTS MULTIPLE BEFORE/AFTER BLOCKS IN THE SAME FILE!
 
 Syntax:
-@Kif FILE <absolute_path>
-@Kif SEARCH_AND_REPLACE(parameters)
+@Kif SEARCH_AND_REPLACE(<parameters>) <absolute_path>
 @Kif BEFORE
 ... (exact text to find) ...
 @Kif END_BEFORE
 @Kif AFTER
 ... (replacement text) ...
+@Kif END_AFTER
+@Kif BEFORE
+... (another text to find) ...
+@Kif END_BEFORE
+@Kif AFTER
+... (another replacement) ...
 @Kif END_AFTER
 @Kif END_SEARCH_AND_REPLACE
 
@@ -227,10 +298,11 @@ Critical Rules:
 - BEFORE block must match exactly (including whitespace)
 - Use absolute paths
 - Files are automatically backed up
+- Multiple BEFORE/AFTER blocks are processed sequentially
+- All blocks share the same parameters
 
-Example - Simple Replacement:
-@Kif FILE /home/user/project/lib/ui_button.dart
-@Kif SEARCH_AND_REPLACE
+Example - Multiple Replacements in Same File:
+@Kif SEARCH_AND_REPLACE /home/user/project/lib/ui_button.dart
 @Kif BEFORE
   void onPressed() {
     print('Button pressed');
@@ -242,11 +314,16 @@ Example - Simple Replacement:
     _handleButtonPress();
   }
 @Kif END_AFTER
+@Kif BEFORE
+  final String label = 'Submit';
+@Kif END_BEFORE
+@Kif AFTER
+  final String label = 'Submit Form';
+@Kif END_AFTER
 @Kif END_SEARCH_AND_REPLACE
 
 Example - Replace All Occurrences:
-@Kif FILE /home/user/project/lib/theme.dart
-@Kif SEARCH_AND_REPLACE(replace_all=true)
+@Kif SEARCH_AND_REPLACE(replace_all=true) /home/user/project/lib/theme.dart
 @Kif BEFORE
 Color.blue
 @Kif END_BEFORE
@@ -256,8 +333,7 @@ Color(0xFF2196F3)
 @Kif END_SEARCH_AND_REPLACE
 
 Example - Replace Specific Count:
-@Kif FILE /home/user/project/lib/logger.dart
-@Kif SEARCH_AND_REPLACE(count=3)
+@Kif SEARCH_AND_REPLACE(count=3) /home/user/project/lib/logger.dart
 @Kif BEFORE
 print(
 @Kif END_BEFORE
@@ -267,8 +343,7 @@ debugPrint(
 @Kif END_SEARCH_AND_REPLACE
 
 Example - Using Regex:
-@Kif FILE /home/user/project/lib/config.dart
-@Kif SEARCH_AND_REPLACE(regex=true, replace_all=true)
+@Kif SEARCH_AND_REPLACE(regex=true, replace_all=true) /home/user/project/lib/config.dart
 @Kif BEFORE
 const int timeout = \d+;
 @Kif END_BEFORE
@@ -284,9 +359,10 @@ Best Practices for LLMs
 If the user has already shared code, pasted file contents, or you have the information from earlier in the conversation, go straight to execution. Don't ask for information you already have.
 
 2. Inquire Only When Necessary
-Before making changes, you need to understand the codebase. But ONLY use inquiry operations (@Kif READ, @Kif TREE) when:
+Before making changes, you need to understand the codebase. But ONLY use inquiry operations (@Kif READ, @Kif TREE, @Kif FIND) when:
 - You don't have the file contents
 - You don't know the directory structure
+- You need to find files by pattern
 - You need to see implementation details not provided
 
 3. Write Minimal Changes
@@ -294,33 +370,23 @@ Use SEARCH_AND_REPLACE instead of rewriting entire files. Only include the speci
 
 Exception: When the new content is drastically different from the original file, use OVERWRITE_FILE instead of multiple SEARCH_AND_REPLACE operations.
 
-4. Use Regex Wisely
+4. Use Multiple BEFORE/AFTER Blocks
+When making multiple changes to the same file, use multiple BEFORE/AFTER blocks in a single SEARCH_AND_REPLACE directive instead of multiple separate directives.
+
+5. Use Regex Wisely
 When you need pattern matching, enable regex=true and remember to use replace_all=true if you want to replace all matches.
 
-5. Be Precise with BEFORE Blocks
+6. Be Precise with BEFORE Blocks
 The BEFORE block must match exactly. If unsure about whitespace, use ignore_whitespace=true.
 
-6. Use Absolute Paths
+7. Use Absolute Paths
 Never use relative paths. Always specify the full path from the project root.
 
-7. Multiple Files and Operations
-You can operate on multiple files and use different operations in a single .kifdiff file.
+8. No More FILE Directive
+The @Kif FILE directive has been removed. All directives now take file paths directly as arguments.
 
-Example:
-@Kif FILE /path/to/first.dart
-@Kif SEARCH_AND_REPLACE
-...
-@Kif END_SEARCH_AND_REPLACE
-
-@Kif FILE /path/to/second.dart
-@Kif SEARCH_AND_REPLACE
-...
-@Kif END_SEARCH_AND_REPLACE
-
-@Kif MOVE /path/to/old_file.dart /path/to/new_location/new_file.dart
-
-@Kif FILE /path/to/third.dart
-@Kif DELETE
+9. Use FIND for Discovery
+When you need to find files by pattern, use the new FIND directive instead of asking the user to manually locate files.
 
 
 Common Workflow Examples
@@ -330,8 +396,7 @@ User Request: "Here's my home_screen.dart file: [paste code]. Add a new button."
 
 Your Response (Direct Execution):
 ```text
-@Kif FILE /home/user/project/lib/screens/home_screen.dart
-@Kif SEARCH_AND_REPLACE
+@Kif SEARCH_AND_REPLACE /home/user/project/lib/screens/home_screen.dart
 @Kif BEFORE
       body: Center(
         child: Text('Welcome'),
@@ -360,12 +425,20 @@ Your Response (Inquiry First):
 I need to see the current home screen implementation. Please run this inquiry:
 ```text
 @Kif READ /home/user/project/lib/screens/home_screen.dart
-@Kif TREE /home/user/project/lib/widgets/
 ```
 
-Once you provide the results, I'll create the changes.
-
 [After receiving results, then provide execution file]
+
+Scenario 3: Finding Files by Pattern
+User Request: "Update all Python test files to use the new test framework"
+
+Your Response (Inquiry First):
+Let me find all the test files first:
+```text
+@Kif FIND(match_pattern=".*test.*\.py$", exclude="__pycache__|\.pyc$") /home/user/project/
+```
+
+[After receiving results, create SEARCH_AND_REPLACE directives for the found files]
 
 
 Remember
@@ -375,6 +448,8 @@ DO:
 - Always wrap KifDiff content in code blocks
 - Use absolute paths
 - Write minimal, targeted changes
+- Use multiple BEFORE/AFTER blocks for multiple changes in same file
+- Use FIND to discover files by pattern
 - Use regex when patterns are needed
 
 DO NOT:
@@ -383,5 +458,6 @@ DO NOT:
 - Use relative paths
 - Rewrite entire files when small changes suffice
 - Forget replace_all=true when using regex to replace all matches
+- Use the old @Kif FILE directive (it's been removed)
 
 The golden rule: Only inquire when you lack necessary information. If you have all the necessary context, feel free to execute directly.

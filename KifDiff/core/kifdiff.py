@@ -56,54 +56,70 @@ def process_diff_files(diff_files, args):
         print(f"{'='*60}")
         total_stats.print_summary()
     
-    # Show final notification for clipboard operations
-    if total_stats.clipboard_files or total_stats.clipboard_dirs or total_stats.clipboard_errors:
-        files_count = len(total_stats.clipboard_files)
-        dirs_count = len(total_stats.clipboard_dirs)
-        errors_count = len(total_stats.clipboard_errors)
-        
-        # Build the message based on what was copied
-        message_parts = []
-        
+    # Show notification for all script runs
+    # Calculate totals
+    total_successful = total_stats.created + total_stats.modified + total_stats.deleted
+    files_count = len(total_stats.clipboard_files)
+    dirs_count = len(total_stats.clipboard_dirs)
+    errors_count = len(total_stats.clipboard_errors)
+    
+    # Build notification based on stats
+    message_parts = []
+    
+    # Add operation breakdown
+    if total_stats.created > 0:
+        message_parts.append(f"{total_stats.created} created")
+    if total_stats.modified > 0:
+        message_parts.append(f"{total_stats.modified} modified")
+    if total_stats.deleted > 0:
+        message_parts.append(f"{total_stats.deleted} deleted")
+    if total_stats.skipped > 0:
+        message_parts.append(f"{total_stats.skipped} skipped")
+    
+    # Add clipboard info if relevant
+    if files_count > 0 or dirs_count > 0:
+        clipboard_parts = []
         if files_count > 0:
-            files_list = [os.path.basename(f) for f in total_stats.clipboard_files[:3]]  # Show max 3 files
-            if files_count > 3:
-                files_list.append(f"... and {files_count - 3} more")
-            files_msg = ", ".join(files_list)
-            message_parts.append(f"{files_count} file(s)")
-            if files_count <= 3:
-                message_parts[-1] += f": {files_msg}"
-        
+            clipboard_parts.append(f"{files_count} file(s)")
         if dirs_count > 0:
-            dirs_list = [os.path.basename(d) for d in total_stats.clipboard_dirs[:3]]  # Show max 3 dirs
-            if dirs_count > 3:
-                dirs_list.append(f"... and {dirs_count - 3} more")
-            dirs_msg = ", ".join(dirs_list)
-            message_parts.append(f"{dirs_count} director(y/ies)")
-            if dirs_count <= 3:
-                message_parts[-1] += f": {dirs_msg}"
-        
-        if errors_count > 0:
-            message_parts.append(f"{errors_count} error(s)")
-        
-        # Set title and notification type based on what happened
-        if errors_count > 0 and (files_count > 0 or dirs_count > 0):
-            title = "KifDiff - Partial Success"
-            notification_type = "warning"
-        elif errors_count > 0:
-            title = "KifDiff - Errors Only"
-            notification_type = "error"
+            clipboard_parts.append(f"{dirs_count} tree(s)")
+        if clipboard_parts:
+            message_parts.append(f"clipboard: {', '.join(clipboard_parts)}")
+    
+    # Set title and notification type based on what happened
+    if total_stats.failed > 0:
+        title = "KifDiff - Failed"
+        notification_type = "error"
+        if total_successful > 0:
+            message = f"{total_stats.failed} failed, {total_successful} succeeded"
         else:
-            title = "KifDiff - Success"
-            notification_type = "success"
-        
-        # Build the final message
-        if len(message_parts) == 1:
-            message = f"Copied {message_parts[0]} to clipboard."
+            message = f"{total_stats.failed} operation(s) failed"
+        if message_parts:
+            message += f" ({', '.join(message_parts)})"
+    elif total_stats.skipped > 0 and total_successful > 0:
+        title = "KifDiff - Partial Success"
+        notification_type = "warning"
+        message = f"{total_successful} operations succeeded"
+        if message_parts:
+            message += f" ({', '.join(message_parts)})"
+    elif total_successful == 0:
+        # No file operations performed (maybe just READ/TREE)
+        if files_count > 0 or dirs_count > 0:
+            title = "KifDiff - Inquiry Complete"
+            notification_type = "info"
+            message = ', '.join(message_parts).capitalize() if message_parts else "Inquiry completed"
         else:
-            message = f"Copied {', '.join(message_parts[:-1])} and {message_parts[-1]} to clipboard."
-        
-        show_notification(title, message, notification_type)
+            title = "KifDiff - No Changes"
+            notification_type = "info"
+            message = "No operations performed"
+    else:
+        title = "KifDiff - Success"
+        notification_type = "success"
+        message = f"{total_successful} operations succeeded"
+        if message_parts:
+            message += f" ({', '.join(message_parts)})"
+    
+    show_notification(title, message, notification_type)
     
     # Git integration
     if args.git_commit and not args.dry_run:
