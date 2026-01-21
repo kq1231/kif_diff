@@ -5,16 +5,16 @@ from .ast_nodes import (
     ReadDirective, TreeDirective, OverwriteFileDirective,
     SearchAndReplaceDirective, FindDirective
 )
-from .directives import (
-    CreateDirective as CreateDirectiveImpl,
-    DeleteDirective as DeleteDirectiveImpl,
-    MoveDirective as MoveDirectiveImpl,
-    ReadDirective as ReadDirectiveImpl,
-    TreeDirective as TreeDirectiveImpl,
-    SearchReplaceDirective,
-    FindDirective as FindDirectiveImpl
+from .executors import (
+    CreateExecutor as CreateExecutorImpl,
+    DeleteExecutor as DeleteExecutorImpl,
+    MoveExecutor as MoveExecutorImpl,
+    ReadExecutor as ReadExecutorImpl,
+    TreeExecutor as TreeExecutorImpl,
+    SearchReplaceExecutor,
+    FindExecutor as FindExecutorImpl
 )
-from .directives.overwrite import OverwriteDirective as OverwriteDirectiveImpl
+from .executors.overwrite import OverwriteExecutor as OverwriteExecutorImpl
 from .stats import Stats
 from utils.output import print_info, print_error
 
@@ -27,14 +27,15 @@ class ASTExecutor:
         self.args = args
         
         # Initialize directive implementations
-        self.create_impl = CreateDirectiveImpl()
-        self.delete_impl = DeleteDirectiveImpl()
-        self.move_impl = MoveDirectiveImpl()
-        self.read_impl = ReadDirectiveImpl()
-        self.tree_impl = TreeDirectiveImpl()
-        self.overwrite_impl = OverwriteDirectiveImpl()
-        self.search_replace_impl = SearchReplaceDirective()
-        self.find_impl = FindDirectiveImpl()
+        self.create_impl = CreateExecutorImpl()
+        self.delete_impl = DeleteExecutorImpl()
+        self.move_impl = MoveExecutorImpl()
+        self.read_impl = ReadExecutorImpl()
+        self.tree_impl = TreeExecutorImpl()
+        self.overwrite_impl = OverwriteExecutorImpl()
+        self.search_replace_impl = SearchReplaceExecutor()
+        self.find_impl = FindExecutorImpl()
+
     
     def execute(self, program: Program):
         """Execute all directives in the program."""

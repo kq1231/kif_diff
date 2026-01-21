@@ -5,7 +5,7 @@ import re
 from difflib import get_close_matches
 from utils.output import print_info, print_success, print_error, print_warning
 
-class SearchReplaceDirective:
+class SearchReplaceExecutor:
     """Handles @Kif SEARCH_AND_REPLACE directive."""
     
     def __init__(self):

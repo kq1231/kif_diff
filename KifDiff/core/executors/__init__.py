@@ -1,11 +1,11 @@
 # Directives module initialization
-from .create import CreateDirective
-from .delete import DeleteDirective
-from .move import MoveDirective
-from .read import ReadDirective
-from .tree import TreeDirective
-from .search_replace import SearchReplaceDirective
-from .find import FindDirective
+from .create import CreateExecutor
+from .delete import DeleteExecutor
+from .move import MoveExecutor
+from .read import ReadExecutor
+from .tree import TreeExecutor
+from .search_replace import SearchReplaceExecutor
+from .find import FindExecutor
 from .params import DirectiveParams
 
 __all__ = [

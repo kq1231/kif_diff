@@ -4,7 +4,7 @@ import os
 import shutil
 from utils.output import print_info, print_success, print_error, print_warning
 
-class MoveDirective:
+class MoveExecutor:
     """Handles @Kif MOVE directive to move/rename files and directories."""
     
     def execute(self, source_path, dest_path, stats, line_num=0, args=None):

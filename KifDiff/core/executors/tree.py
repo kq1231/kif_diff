@@ -3,7 +3,7 @@
 import os
 from utils.output import print_info, print_success, print_error, print_warning, print_tree
 
-class TreeDirective:
+class TreeExecutor:
     """Handles @Kif TREE directive to show directory structure."""
     
     def execute(self, dir_path, params, stats, line_num=0, args=None):

@@ -3,7 +3,7 @@
 import os
 from utils.output import print_info, print_success, print_error, print_warning
 
-class ReadDirective:
+class ReadExecutor:
     """Handles @Kif READ directive to read files to clipboard."""
     
     def execute(self, file_path, stats, line_num=0, args=None):

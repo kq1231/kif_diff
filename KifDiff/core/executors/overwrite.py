@@ -4,7 +4,7 @@ import os
 from utils.output import print_info, print_success, print_error, print_warning
 from utils.backup import backup_file
 
-class OverwriteDirective:
+class OverwriteExecutor:
     """Handles @Kif OVERWRITE_FILE directive to completely replace file contents."""
     
     def execute(self, file_path, content, stats, line_num=0, args=None):

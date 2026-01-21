@@ -3,7 +3,7 @@
 import os
 from utils.output import print_info, print_success, print_error, print_warning
 
-class DeleteDirective:
+class DeleteExecutor:
     """Handles @Kif DELETE directive to delete files."""
     
     def execute(self, file_path, stats, line_num=0, args=None):

@@ -6,7 +6,7 @@ from typing import List, Pattern
 from utils.output import print_info, print_success, print_error, print_warning
 
 
-class FindDirective:
+class FindExecutor:
     """Handles @Kif FIND directive to find files matching patterns."""
     
     def compile_pattern(self, pattern_str: str) -> Pattern:

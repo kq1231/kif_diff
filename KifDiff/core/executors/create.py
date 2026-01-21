@@ -3,7 +3,7 @@
 import os
 from utils.output import print_info, print_success, print_error, print_warning
 
-class CreateDirective:
+class CreateExecutor:
     """Handles @Kif CREATE directive to create files."""
     
     def execute(self, file_path, content, stats, line_num=0, args=None):
