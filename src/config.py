@@ -119,8 +119,10 @@ DEFAULT_BLOCKED_PATTERNS = [
     r".*curl.*\|.*sh.*",  # Pipe to shell
     r".*wget.*\|.*sh.*",
     r".*>\s*/dev/sd.*",  # Write to disk devices
-    r".*eval.*",
-    r".*exec.*",
+    r"^eval\s+.*",  # eval command
+    r"^exec\s+.*",  # exec command (process replacement)
+    r".*;\s*exec\s+.*",  # exec after semicolon
+    r".*\|\s*exec\s+.*",  # piped to exec
     
     # Process manipulation
     r"^kill\s+-9.*",  # kill -9
