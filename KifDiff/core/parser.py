@@ -8,7 +8,7 @@ from .lexer import Lexer, Token, TokenType
 from .ast_nodes import (
     Program, Directive, CreateDirective, DeleteDirective, MoveDirective,
     ReadDirective, TreeDirective, OverwriteFileDirective, 
-    SearchAndReplaceDirective, FindDirective, BeforeAfterBlock
+    SearchAndReplaceDirective, FindDirective, RunDirective, BeforeAfterBlock
 )
 from .executor import ASTExecutor
 from utils.output import RICH_SUPPORT, print_info, print_error, print_header, print_clipboard_summary, print_ast_tree
@@ -336,6 +336,20 @@ class Parser:
         
         return FindDirective(line=line, column=column, params=params, path=path)
     
+    def parse_run_directive(self, line: int, column: int) -> RunDirective:
+        """Parse RUN directive."""
+        params = {}
+        
+        # Check for parameters
+        if self.current_token().type == TokenType.LPAREN:
+            params = self.parse_parameters()
+        
+        # Parse command (everything after RUN until newline)
+        command = self.parse_path()
+        self.skip_newlines()
+        
+        return RunDirective(line=line, column=column, params=params, command=command)
+    
     def parse_directive(self) -> Optional[Directive]:
         """Parse a single directive."""
         # Expect @Kif
@@ -371,6 +385,8 @@ class Parser:
             return self.parse_search_and_replace_directive(line, column)
         elif directive_token.type == TokenType.FIND:
             return self.parse_find_directive(line, column)
+        elif directive_token.type == TokenType.RUN:
+            return self.parse_run_directive(line, column)
         else:
             self.error(f"Unknown directive: {directive_token.value}", directive_token)
     

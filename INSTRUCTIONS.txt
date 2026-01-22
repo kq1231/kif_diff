@@ -353,6 +353,80 @@ const int timeout = 5000;
 @Kif END_SEARCH_AND_REPLACE
 
 
+6. Run Terminal Command
+
+Executes terminal commands with security controls (allowlist/blocklist).
+
+Syntax:
+@Kif RUN <command>
+@Kif RUN(<parameters>) <command>
+
+Parameters:
+- timeout=N (default: 30, max: 300)
+  Command timeout in seconds
+
+- shell=true/false (default: false)
+  Allow shell expansion ($VAR, ~, wildcards)
+
+Security:
+- Commands are filtered by patterns in config.py
+- Default mode: allowlist (only allowed commands run)
+- Always blocks dangerous operations (rm -rf, sudo, etc.)
+- Users can customize per-project or globally
+
+Important:
+- Command output is captured and copied to clipboard
+- Exit codes are reported (0 = success, non-zero = failure)
+- Commands execute in project root directory
+- Timeout protection prevents hanging processes
+
+Examples:
+
+Basic command:
+@Kif RUN git status
+
+With timeout:
+@Kif RUN(timeout=60) npm install
+
+With shell expansion:
+@Kif RUN(shell=true) echo $PATH
+
+Multiple commands in sequence:
+@Kif RUN flutter pub get
+@Kif RUN flutter test
+@Kif RUN flutter build apk
+
+Configuration:
+Create .kifdiff/config.py in your project or ~/.kifdiff/config.py globally:
+
+```python
+from config import allow_pattern, block_pattern, set_mode
+
+# Allow additional commands
+allow_pattern(r"^docker\s+(build|run|ps).*")
+allow_pattern(r"^make\s+(build|test).*")
+
+# Block specific patterns
+block_pattern(r".*production.*")
+
+# Change to blocklist mode (allow all except blocked)
+set_mode("blocklist")
+```
+
+Default Allowed Commands:
+- Version control: git status, git commit, git push, etc.
+- Package managers: npm install, pip install, cargo build, etc.
+- File operations (read-only): ls, cat, grep, find, tree
+- System info (read-only): pwd, whoami, date, which
+- Testing/linting: pytest, jest, eslint, pylint, etc.
+
+Always Blocked (regardless of mode):
+- Destructive: rm -rf, dd, mkfs, format
+- Privilege escalation: sudo, su
+- System modification: chmod 777, chown, shutdown, reboot
+- Dangerous patterns: curl | sh, eval, kill -9
+
+
 Best Practices for LLMs
 
 1. Skip Inquiry When You Have Context
@@ -388,6 +462,14 @@ The @Kif FILE directive has been removed. All directives now take file paths dir
 9. Use FIND for Discovery
 When you need to find files by pattern, use the new FIND directive instead of asking the user to manually locate files.
 
+10. Use RUN for Automation
+When implementing features that require running commands (tests, builds, installations), use RUN directives to automate the workflow. This allows users to execute the entire setup with a single kifdiff file.
+
+11. Chain Commands Thoughtfully
+When using multiple RUN directives, consider dependencies and error handling. For example:
+- Run `npm install` before `npm test`
+- Run `flutter pub get` before `flutter build`
+- Check if commands succeeded before proceeding
 
 Common Workflow Examples
 

@@ -89,3 +89,13 @@ class FindDirective(Directive):
     - include: Regex pattern for files to include
     """
     path: str = ""
+
+@dataclass
+class RunDirective(Directive):
+    """@Kif RUN(<params>) <command>
+    
+    Parameters:
+    - timeout: Command timeout in seconds (default: 30)
+    - shell: Allow shell expansion (default: false)
+    """
+    command: str = ""

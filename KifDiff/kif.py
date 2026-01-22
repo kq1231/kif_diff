@@ -10,6 +10,10 @@ from core.kifdiff import validate_kifdiff, process_diff_files
 from utils.backup import list_backup_sessions, rollback_backups
 from utils.output import print_error, print_info
 
+# Load user config for RUN directive
+from config import load_user_config
+load_user_config()
+
 def main():
     parser = argparse.ArgumentParser(
         description="KifDiff: A powerful file modification tool with safety features.",
@@ -33,6 +37,9 @@ Directives:
   @Kif READ <path>                            # Read file content to clipboard
   @Kif TREE <dir>                             # Copy directory tree structure to clipboard
   @Kif SEARCH_AND_REPLACE                     # Replace content in file
+  @Kif RUN <command>                          # Execute terminal command (with security controls)
+  @Kif OVERWRITE_FILE <path>                  # Overwrite file content
+  @Kif FIND <path>                            # Find files and directories
 
 Directive Parameters:
   @Kif SEARCH_AND_REPLACE(replace_all=true, ignore_whitespace=false)
@@ -50,6 +57,11 @@ Directive Parameters:
     - show_hidden: Show hidden files/directories (default: false)
     - include_files: Show files in tree (default: true)
     - Note: Tree structure is copied to clipboard, not displayed
+  
+  Available parameters for RUN:
+    - timeout: Command timeout in seconds (default: 30, max: 300)
+    - shell: Allow shell expansion like $VAR, ~, wildcards (default: false)
+    - Note: Commands are filtered by allowlist/blocklist in config.py
         """
     )
 

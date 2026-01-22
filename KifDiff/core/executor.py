@@ -3,7 +3,7 @@
 from .ast_nodes import (
     Program, CreateDirective, DeleteDirective, MoveDirective,
     ReadDirective, TreeDirective, OverwriteFileDirective,
-    SearchAndReplaceDirective, FindDirective
+    SearchAndReplaceDirective, FindDirective, RunDirective
 )
 from .executors import (
     CreateExecutor as CreateExecutorImpl,
@@ -67,6 +67,8 @@ class ASTExecutor:
             self.execute_search_replace(directive)
         elif isinstance(directive, FindDirective):
             self.execute_find(directive)
+        elif isinstance(directive, RunDirective):
+            self.execute_run(directive)
         else:
             print_error(f"Unknown directive type: {type(directive).__name__}")
             self.stats.failed += 1
@@ -149,3 +151,8 @@ class ASTExecutor:
             directive.line,
             self.args
         )
+    
+    def execute_run(self, directive: RunDirective):
+        """Execute RUN directive."""
+        from .executors.run import execute_run
+        execute_run(directive, self.stats, self.args)

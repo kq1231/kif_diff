@@ -20,6 +20,7 @@ class TokenType(Enum):
     SEARCH_AND_REPLACE = auto()
     OVERWRITE_FILE = auto()
     FIND = auto()
+    RUN = auto()
     
     # Block markers
     BEFORE = auto()
@@ -180,6 +181,7 @@ class Lexer:
             'SEARCH_AND_REPLACE': TokenType.SEARCH_AND_REPLACE,
             'OVERWRITE_FILE': TokenType.OVERWRITE_FILE,
             'FIND': TokenType.FIND,
+            'RUN': TokenType.RUN,
             'BEFORE': TokenType.BEFORE,
             'END_BEFORE': TokenType.END_BEFORE,
             'AFTER': TokenType.AFTER,
