@@ -12,7 +12,7 @@ class CommandConfig:
     """Configuration for RUN directive command execution"""
     
     # Mode: "allowlist" (only allowed patterns run) or "blocklist" (everything except blocked runs)
-    mode: Literal["allowlist", "blocklist"] = "allowlist"
+    mode: Literal["allowlist", "blocklist"] = "blocklist"
     
     # Default timeout for commands (seconds)
     default_timeout: int = 30
@@ -21,7 +21,8 @@ class CommandConfig:
     max_timeout: int = 300
     
     # Allow shell expansion (e.g., $PATH, ~, wildcards)
-    allow_shell: bool = False
+    # Default is True so commands with arguments work properly
+    allow_shell: bool = True
     
     # Allowed command patterns (regex)
     allowed_patterns: List[str] = None
@@ -96,7 +97,8 @@ DEFAULT_BLOCKED_PATTERNS = [
     r".*rm\s+-fr.*",
     r".*rm\s+.*\*.*",  # rm with wildcards
     r".*rmdir.*",
-    r".*dd\s+.*",
+    r"^dd\s+.*",  # dd command (disk destroyer) - must be at start
+    r".*\|\s*dd\s+.*",  # piped to dd
     r".*mkfs.*",
     r".*format.*",
     
@@ -106,13 +108,12 @@ DEFAULT_BLOCKED_PATTERNS = [
     r".*doas.*",
     
     # System modification
-    r".*chmod.*777.*",
-    r".*chmod.*\+x.*",
-    r".*chown.*",
-    r".*shutdown.*",
-    r".*reboot.*",
-    r".*halt.*",
-    r".*init\s+[06].*",
+    r"^chmod.*777.*",  # chmod 777
+    r"^chown\s+.*",  # chown command
+    r"^shutdown.*",  # shutdown command
+    r"^reboot$",  # reboot command
+    r"^halt$",  # halt command
+    r"^init\s+[06].*",  # init runlevel change
     
     # Network/security concerns
     r".*curl.*\|.*sh.*",  # Pipe to shell
@@ -122,22 +123,23 @@ DEFAULT_BLOCKED_PATTERNS = [
     r".*exec.*",
     
     # Process manipulation
-    r".*kill\s+-9.*",
-    r".*killall.*",
-    r".*pkill.*",
+    r"^kill\s+-9.*",  # kill -9
+    r"^killall\s+.*",  # killall command
+    r"^pkill\s+.*",  # pkill command
     
-    # System directories
-    r".*/etc/.*",
-    r".*/usr/bin/.*",
-    r".*/var/.*",
-    r".*/sys/.*",
-    r".*/proc/.*",
+    # Writing to system directories (not just reading)
+    r".*>\s*/etc/.*",  # redirect to /etc
+    r".*>\s*/usr/bin/.*",  # redirect to /usr/bin
+    r".*>\s*/var/.*",  # redirect to /var
+    r".*>\s*/sys/.*",  # redirect to /sys
+    r".*>\s*/proc/.*",  # redirect to /proc
     
     # Package removal
-    r".*apt.*remove.*",
-    r".*yum.*remove.*",
-    r".*brew.*uninstall.*",
-    r".*pip.*uninstall.*",
+    r"^apt\s+(remove|purge|autoremove).*",
+    r"^apt-get\s+(remove|purge|autoremove).*",
+    r"^yum\s+remove.*",
+    r"^brew\s+uninstall.*",
+    r"^pip\s+uninstall.*",
 ]
 
 

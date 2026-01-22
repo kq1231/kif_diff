@@ -365,20 +365,27 @@ Parameters:
 - timeout=N (default: 30, max: 300)
   Command timeout in seconds
 
-- shell=true/false (default: false)
-  Allow shell expansion ($VAR, ~, wildcards)
+- shell=true/false (default: true)
+  Enable shell mode for command parsing and expansion
+  Set to false for direct executable calls (more secure but less flexible)
+
+- cwd="path/to/directory" (default: current directory)
+  Working directory where command will execute
+  Supports absolute paths and ~ expansion
+  IMPORTANT: LLMs should specify this when working in project subdirectories
 
 Security:
 - Commands are filtered by patterns in config.py
-- Default mode: allowlist (only allowed commands run)
+- Default mode: blocklist (all commands run except blocked ones)
 - Always blocks dangerous operations (rm -rf, sudo, etc.)
 - Users can customize per-project or globally
 
 Important:
-- Command output is captured and copied to clipboard
+- ALL command output is captured and copied to clipboard (including errors)
 - Exit codes are reported (0 = success, non-zero = failure)
-- Commands execute in project root directory
+- Commands execute in specified working directory (or current directory by default)
 - Timeout protection prevents hanging processes
+- Shell mode is enabled by default for natural command syntax
 
 Examples:
 
@@ -391,10 +398,17 @@ With timeout:
 With shell expansion:
 @Kif RUN(shell=true) echo $PATH
 
+With working directory:
+@Kif RUN(cwd="/path/to/project") npm install
+@Kif RUN(cwd="~/projects/myapp") flutter pub get
+
+Combined parameters:
+@Kif RUN(cwd="/path/to/project", timeout=120, shell=true) npm run build
+
 Multiple commands in sequence:
-@Kif RUN flutter pub get
-@Kif RUN flutter test
-@Kif RUN flutter build apk
+@Kif RUN(cwd="/path/to/flutter/project") flutter pub get
+@Kif RUN(cwd="/path/to/flutter/project") flutter test
+@Kif RUN(cwd="/path/to/flutter/project") flutter build apk
 
 Configuration:
 Create .kifdiff/config.py in your project or ~/.kifdiff/config.py globally:
@@ -409,16 +423,13 @@ allow_pattern(r"^make\s+(build|test).*")
 # Block specific patterns
 block_pattern(r".*production.*")
 
-# Change to blocklist mode (allow all except blocked)
-set_mode("blocklist")
+# Change to allowlist mode (only allow specific patterns)
+set_mode("allowlist")
 ```
 
-Default Allowed Commands:
-- Version control: git status, git commit, git push, etc.
-- Package managers: npm install, pip install, cargo build, etc.
-- File operations (read-only): ls, cat, grep, find, tree
-- System info (read-only): pwd, whoami, date, which
-- Testing/linting: pytest, jest, eslint, pylint, etc.
+Default Mode: Blocklist
+- All commands are allowed EXCEPT those matching blocked patterns
+- This gives maximum flexibility while maintaining safety
 
 Always Blocked (regardless of mode):
 - Destructive: rm -rf, dd, mkfs, format
@@ -470,6 +481,13 @@ When using multiple RUN directives, consider dependencies and error handling. Fo
 - Run `npm install` before `npm test`
 - Run `flutter pub get` before `flutter build`
 - Check if commands succeeded before proceeding
+
+12. ALWAYS Specify Working Directory (cwd) for Project Commands
+When running project-specific commands (npm, flutter, cargo, etc.), ALWAYS specify the cwd parameter:
+- BAD: `@Kif RUN npm install` (might run in wrong directory)
+- GOOD: `@Kif RUN(cwd="/path/to/project") npm install`
+- This is CRITICAL for LLMs working with user projects
+- Default cwd is wherever kifdiff is executed, which may not be the project root
 
 Common Workflow Examples
 

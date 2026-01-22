@@ -60,8 +60,10 @@ Directive Parameters:
   
   Available parameters for RUN:
     - timeout: Command timeout in seconds (default: 30, max: 300)
-    - shell: Allow shell expansion like $VAR, ~, wildcards (default: false)
-    - Note: Commands are filtered by allowlist/blocklist in config.py
+    - shell: Enable shell mode for command parsing (default: true)
+    - cwd: Working directory for command execution (default: current directory)
+    - Note: Default mode is blocklist (all commands allowed except blocked patterns)
+    - Note: Always specify cwd when working in project subdirectories
         """
     )
 

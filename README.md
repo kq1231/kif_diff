@@ -161,26 +161,32 @@ Copies directory structure to clipboard.
 # With timeout
 @Kif RUN(timeout=60) npm install
 
-# With shell expansion
-@Kif RUN(shell=true) echo $PATH
+# Shell is enabled by default, so commands with arguments work naturally
+@Kif RUN echo $PATH
 
-# Multiple commands
-@Kif RUN flutter pub get
-@Kif RUN flutter test
-@Kif RUN flutter build apk
+# With working directory (IMPORTANT for project-specific commands)
+@Kif RUN(cwd="/path/to/project") npm install
+@Kif RUN(cwd="~/projects/myapp") flutter pub get
+
+# Combined parameters
+@Kif RUN(cwd="/path/to/project", timeout=120) npm run build
+
+# Multiple commands in same directory
+@Kif RUN(cwd="/path/to/flutter/project") flutter pub get
+@Kif RUN(cwd="/path/to/flutter/project") flutter test
+@Kif RUN(cwd="/path/to/flutter/project") flutter build apk
 ```
 
 #### Security Features
 
-Commands are filtered by **allowlist/blocklist** patterns in `config.py`:
+Commands are filtered by **blocklist** patterns in `config.py`:
 
-**Default Allowed:**
-- Version control: `git status`, `git commit`, `git push`
-- Package managers: `npm install`, `pip install`, `cargo build`
-- File operations: `ls`, `cat`, `grep`, `find`, `tree`
-- Testing: `pytest`, `jest`, `eslint`, `pylint`
+**Default Mode: Blocklist**
+- All commands are allowed by default
+- Only blocked patterns are prevented from running
+- Maximum flexibility with safety guardrails
 
-**Always Blocked:**
+**Always Blocked (Dangerous Operations):**
 - Destructive: `rm -rf`, `dd`, `format`
 - Privilege escalation: `sudo`, `su`
 - System modification: `chmod 777`, `shutdown`, `reboot`
@@ -200,8 +206,8 @@ allow_pattern(r"^make\s+(build|test).*")
 # Block specific patterns
 block_pattern(r".*production.*")
 
-# Change to blocklist mode (allow all except blocked)
-set_mode("blocklist")
+# Change to allowlist mode (only allow specific patterns)
+set_mode("allowlist")
 
 # Adjust timeout defaults
 from config import command_config

@@ -11,7 +11,9 @@ def execute_run(directive, stats, args):
     
     command = directive.command
     timeout = directive.params.get('timeout', command_config.default_timeout)
-    shell = directive.params.get('shell', command_config.allow_shell)
+    # Use shell=True by default so commands with arguments work properly
+    shell = directive.params.get('shell', True)
+    cwd = directive.params.get('cwd', None)
     
     # Enforce max timeout
     if timeout > command_config.max_timeout:
@@ -19,7 +21,7 @@ def execute_run(directive, stats, args):
     
     if args.verbose:
         print_info(f"RUN: {command}")
-        print_info(f"  Timeout: {timeout}s, Shell: {shell}")
+        print_info(f"  Timeout: {timeout}s, Shell: {shell}, CWD: {cwd if cwd else 'current directory'}")
     
     # Check if command is allowed
     allowed, reason = is_command_allowed(command)
@@ -47,10 +49,18 @@ Reason: {reason}
     
     # Execute the command
     try:
-        print_info(f"Executing: {command}")
-        
-        # Determine working directory - use project root
-        cwd = Path.cwd()
+        # Determine working directory
+        if cwd:
+            working_dir = Path(cwd).expanduser().resolve()
+            if not working_dir.exists():
+                print_error(f"✗ Working directory does not exist: {working_dir}")
+                stats.failed += 1
+                return
+            print_info(f"Executing in: {working_dir}")
+            print_info(f"Command: {command}")
+        else:
+            working_dir = Path.cwd()
+            print_info(f"Executing: {command}")
         
         result = subprocess.run(
             command,
@@ -58,7 +68,7 @@ Reason: {reason}
             capture_output=True,
             text=True,
             timeout=timeout,
-            cwd=str(cwd)
+            cwd=str(working_dir)
         )
         
         # Format output
@@ -88,6 +98,7 @@ Reason: {reason}
         # Format for clipboard
         clipboard_output = f"""{'='*80}
 Command: {command}
+Working Directory: {working_dir}
 Status: {status_symbol} {status_text} (exit code: {result.returncode})
 {'='*80}
 """
@@ -106,15 +117,26 @@ Status: {status_symbol} {status_text} (exit code: {result.returncode})
         else:
             stats.failed += 1
         
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as e:
         print_error(f"✗ COMMAND TIMEOUT: Command exceeded {timeout} seconds")
+        
+        # Include any partial output in clipboard
+        stdout_partial = e.stdout.decode('utf-8') if e.stdout else ''
+        stderr_partial = e.stderr.decode('utf-8') if e.stderr else ''
         
         timeout_output = f"""{'='*80}
 Command: {command}
+Working Directory: {working_dir}
 Status: ✗ TIMEOUT
 Timeout: {timeout} seconds
 {'='*80}
 """
+        if stdout_partial:
+            timeout_output += f"\nPartial Output:\n{stdout_partial}\n"
+        if stderr_partial:
+            timeout_output += f"\nPartial Errors:\n{stderr_partial}\n"
+        timeout_output += "=" * 80 + "\n"
+        
         stats.clipboard_buffer.append(timeout_output)
         stats.clipboard_errors.append(command)
         stats.failed += 1
@@ -124,6 +146,7 @@ Timeout: {timeout} seconds
         
         error_output = f"""{'='*80}
 Command: {command}
+Working Directory: {working_dir if 'working_dir' in locals() else Path.cwd()}
 Status: ✗ ERROR
 Error: {str(e)}
 {'='*80}
