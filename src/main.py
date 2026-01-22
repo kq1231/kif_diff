@@ -6,7 +6,7 @@ import sys
 import argparse
 
 # Import core modules
-from core.kifdiff import validate_kifdiff, process_diff_files
+from core.kif_diff import validate_kifdiff, process_diff_files
 from utils.backup import list_backup_sessions, rollback_backups
 from utils.output import print_error, print_info
 
