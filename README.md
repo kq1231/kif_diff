@@ -21,9 +21,6 @@ cd kif_diff
 
 # Install dependencies
 pip install -r requirements.txt
-
-# Make executable (optional)
-chmod +x KifDiff/kif.py
 ```
 
 ## 🚀 Quick Start
@@ -32,29 +29,29 @@ chmod +x KifDiff/kif.py
 
 ```bash
 # Apply changes from a .kifdiff file
-python3 KifDiff/kif.py changes.kifdiff
+python3 src/kif.py changes.kifdiff
 
 # Preview changes without applying (dry-run)
-python3 KifDiff/kif.py changes.kifdiff --dry-run
+python3 src/kif.py changes.kifdiff --dry-run
 
 # Interactive mode (confirm each operation)
-python3 KifDiff/kif.py changes.kifdiff -i
+python3 src/kif.py changes.kifdiff -i
 
 # Validate syntax without executing
-python3 KifDiff/kif.py changes.kifdiff --validate
+python3 src/kif.py changes.kifdiff --validate
 ```
 
 ### Rollback Changes
 
 ```bash
 # Undo the most recent changes
-python3 KifDiff/kif.py --rollback
+python3 src/kif.py --rollback
 
 # List all backup sessions
-python3 KifDiff/kif.py --list-sessions
+python3 src/kif.py --list-sessions
 
 # Restore a specific session
-python3 KifDiff/kif.py --rollback-session session_20240122_123456
+python3 src/kif.py --rollback-session session_20240122_123456
 ```
 
 ## 📝 KifDiff Syntax
@@ -267,19 +264,19 @@ export default function Button() {
 
 ```bash
 # Verbose output for debugging
-python3 KifDiff/kif.py changes.kifdiff -v
+python3 src/kif.py changes.kifdiff -v
 
 # Skip backups (not recommended)
-python3 KifDiff/kif.py changes.kifdiff --no-backup
+python3 src/kif.py changes.kifdiff --no-backup
 
 # Custom backup directory
-python3 KifDiff/kif.py changes.kifdiff --backup-dir /custom/path
+python3 src/kif.py changes.kifdiff --backup-dir /custom/path
 
 # Git integration
-python3 KifDiff/kif.py changes.kifdiff --git-commit --git-message "Applied changes"
+python3 src/kif.py changes.kifdiff --git-commit --git-message "Applied changes"
 
 # Multiple files at once
-python3 KifDiff/kif.py file1.kifdiff file2.kifdiff file3.kifdiff
+python3 src/kif.py file1.kifdiff file2.kifdiff file3.kifdiff
 ```
 
 ## 💡 Tips for LLM Usage
