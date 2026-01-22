@@ -166,7 +166,7 @@ def set_mode(mode: Literal["allowlist", "blocklist"]):
 def load_user_config():
     """
     Load user config with priority: project > user home > default
-    This should be called by kif.py on startup.
+    This should be called by main.py on startup.
     """
     import sys
     from pathlib import Path
