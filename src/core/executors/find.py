@@ -152,7 +152,6 @@ class FindExecutor:
             
             stats.clipboard_buffer.append(formatted_content)
             stats.clipboard_dirs.append(directory)
-            stats.modified += 1
             
             return True
             

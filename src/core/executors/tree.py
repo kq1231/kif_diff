@@ -81,5 +81,4 @@ class TreeExecutor:
         stats.clipboard_buffer.append(formatted_content)
         print_success("TREE: Directory tree added to clipboard buffer.")
         stats.clipboard_dirs.append(dir_path)
-        stats.modified += 1
         return True

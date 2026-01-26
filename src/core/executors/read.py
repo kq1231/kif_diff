@@ -30,7 +30,6 @@ class ReadExecutor:
             stats.clipboard_buffer.append(formatted_content)
             print_success("READ: File content added to clipboard buffer.")
             stats.clipboard_files.append(file_path)
-            stats.modified += 1
             return True
 
         except IOError as e:
